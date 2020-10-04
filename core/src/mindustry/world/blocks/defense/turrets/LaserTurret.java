@@ -109,5 +109,50 @@ public class LaserTurret extends PowerTurret{
         public boolean shouldActiveSound(){
             return bulletLife > 0 && bullet != null;
         }
+        
+        @Override
+        public void drawSelect(){
+            Drawf.dashCircle(x, y, range, team.color);
+            if(target != null) {
+                float time = Time.time();
+                Lines.stroke(3f, Pal.gray);
+                Lines.square(target.getX(), target.getY(), 6 + 1f + Mathf.sinDeg(time), 45+time);
+                Lines.stroke(1f, Team.crux.color);
+                Lines.square(target.getX(), target.getY(), 6 + 1f + Mathf.sinDeg(time), 45+time);
+                Draw.reset();
+
+                //All units damaged in line
+                Vec2 pos1 = new Vec2(x, y);
+                Vec2 pos2 = new Vec2(target.getX(), target.getY());
+                Vec2 pos3 = new Vec2();
+                if(target.getX() > x) {
+                    float it = (target.getX() - x);
+                    for (float i = 0; i < (target.getX() - x); i++) {
+                        float alpha = i/it;
+                        pos3.set(pos1);
+                        pos1.lerp(pos2, alpha);
+                        //Drawf.square(pos1.x, pos1.y, 3);
+                        Building targ = Units.findEnemyTile(team, pos1.getX(), pos1.getY(), 8, e -> true);
+                        if(targ != null) {
+                            Drawf.square(targ.getX(), targ.getY(), 3, targ.team.color);
+                        }
+                        pos1.set(pos3);
+                    }
+                } else {
+                    float it = (x - target.getX());
+                    for (float i = 0; i < it; i++) {
+                        float alpha = i/it;
+                        pos3.set(pos1);
+                        pos1.lerp(pos2, alpha);
+                        //Drawf.square(pos1.x, pos1.y, 3);
+                        Building targ = Units.findEnemyTile(team, pos1.getX(), pos1.getY(), 8, e -> true);
+                        if(targ != null) {
+                            Drawf.square(targ.getX(), targ.getY(), 3, targ.team.color);
+                        }
+                        pos1.set(pos3);
+                    }
+                }
+            }
+        }
     }
 }
