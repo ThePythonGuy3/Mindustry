@@ -113,7 +113,7 @@ public class LaserTurret extends PowerTurret{
         @Override
         public void drawSelect(){
             Drawf.dashCircle(x, y, range, team.color);
-            if(target != null) {
+            if(target != null and Core.settings.getBool("blockstatus")) {
                 float time = Time.time();
                 Lines.stroke(3f, Pal.gray);
                 Lines.square(target.getX(), target.getY(), 6 + 1f + Mathf.sinDeg(time), 45+time);
