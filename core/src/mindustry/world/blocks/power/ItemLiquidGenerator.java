@@ -72,7 +72,7 @@ public class ItemLiquidGenerator extends PowerGenerator{
         super.setStats();
 
         if(hasItems){
-            stats.add(BlockStat.productionTime, itemDuration / 60f, StatUnit.seconds);
+            stats.add(Stat.productionTime, itemDuration / 60f, StatUnit.seconds);
         }
     }
 
@@ -84,7 +84,7 @@ public class ItemLiquidGenerator extends PowerGenerator{
         return 0.0f;
     }
 
-    public class ItemLiquidGeneratorEntity extends GeneratorEntity{
+    public class ItemLiquidGeneratorBuild extends GeneratorBuild{
         public float explosiveness, heat, totalTime;
 
         @Override
@@ -97,10 +97,11 @@ public class ItemLiquidGenerator extends PowerGenerator{
             //Note: Do not use this delta when calculating the amount of power or the power efficiency, but use it for resource consumption if necessary.
             //Power amount is delta'd by PowerGraph class already.
             float calculationDelta = delta();
+            boolean cons = consValid();
 
-            heat = Mathf.lerpDelta(heat, generateTime >= 0.001f ? 1f : 0f, 0.05f);
+            heat = Mathf.lerpDelta(heat, generateTime >= 0.001f && enabled && cons ? 1f : 0f, 0.05f);
 
-            if(!consValid()){
+            if(!cons){
                 productionEfficiency = 0.0f;
                 return;
             }
@@ -113,7 +114,7 @@ public class ItemLiquidGenerator extends PowerGenerator{
                 }
             }
 
-            totalTime += heat;
+            totalTime += heat * Time.delta;
 
             //liquid takes priority over solids
             if(hasLiquids && liquid != null && liquids.get(liquid) >= 0.001f){
@@ -159,16 +160,13 @@ public class ItemLiquidGenerator extends PowerGenerator{
 
             if(hasItems){
                 Draw.color(heatColor);
-                Draw.alpha(heat * 0.4f + Mathf.absin(Time.time(), 8f, 0.6f) * heat);
+                Draw.alpha(heat * 0.4f + Mathf.absin(Time.time, 8f, 0.6f) * heat);
                 Draw.rect(topRegion, x, y);
                 Draw.reset();
             }
 
             if(hasLiquids){
-                Draw.color(liquids.current().color);
-                Draw.alpha(liquids.currentAmount() / liquidCapacity);
-                Draw.rect(liquidRegion, x, y);
-                Draw.color();
+                Drawf.liquid(liquidRegion, x, y, liquids.total() / liquidCapacity, liquids.current().color);
             }
         }
 

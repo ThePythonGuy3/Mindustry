@@ -16,14 +16,12 @@ import mindustry.*;
 import mindustry.core.*;
 import mindustry.desktop.steam.*;
 import mindustry.game.EventType.*;
+import mindustry.gen.*;
 import mindustry.net.*;
 import mindustry.net.Net.*;
 import mindustry.type.*;
-import mindustry.gen.*;
 
 import java.io.*;
-import java.net.*;
-import java.util.*;
 
 import static mindustry.Vars.*;
 
@@ -38,7 +36,6 @@ public class DesktopLauncher extends ClientLauncher{
             new SdlApplication(new DesktopLauncher(arg), new SdlConfig(){{
                 title = "Mindustry";
                 maximized = true;
-                stencil = 8;
                 width = 900;
                 height = 700;
                 setWindowIcon(FileType.internal, "icons/icon_64.png");
@@ -67,8 +64,7 @@ public class DesktopLauncher extends ClientLauncher{
 
         if(useSteam){
             //delete leftover dlls
-            Fi file = new Fi(".");
-            for(Fi other : file.parent().list()){
+            for(Fi other : new Fi(".").parent().list()){
                 if(other.name().contains("steam") && (other.extension().equals("dll") || other.extension().equals("so") || other.extension().equals("dylib"))){
                     other.delete();
                 }
@@ -111,7 +107,7 @@ public class DesktopLauncher extends ClientLauncher{
         steamError = e;
         loadError = true;
         Log.err(e);
-        try(OutputStream s = new FileOutputStream(new File("steam-error-log-" + System.nanoTime() + ".txt"))){
+        try(OutputStream s = new FileOutputStream("steam-error-log-" + System.nanoTime() + ".txt")){
             String log = Strings.neatError(e);
             s.write(log.getBytes());
         }catch(Exception e2){
@@ -127,9 +123,12 @@ public class DesktopLauncher extends ClientLauncher{
         boolean[] isShutdown = {false};
 
         Events.on(ClientLoadEvent.class, event -> {
-            player.name(SVars.net.friends.getPersonaName());
             Core.settings.defaults("name", SVars.net.friends.getPersonaName());
-            Core.settings.put("name", player.name);
+            if(player.name.isEmpty()){
+                player.name = SVars.net.friends.getPersonaName();
+                Core.settings.put("name", player.name);
+            }
+            steamPlayerName = SVars.net.friends.getPersonaName();
             //update callbacks
             Core.app.addListener(new ApplicationListener(){
                 @Override
@@ -169,14 +168,14 @@ public class DesktopLauncher extends ClientLauncher{
     static void handleCrash(Throwable e){
         Cons<Runnable> dialog = Runnable::run;
         boolean badGPU = false;
-        String finalMessage = Strings.getFinalMesage(e);
+        String finalMessage = Strings.getFinalMessage(e);
         String total = Strings.getCauses(e).toString();
 
-        if(total.contains("Couldn't create window") || total.contains("OpenGL 2.0 or higher") || total.toLowerCase().contains("pixel format") || total.contains("GLEW")){
+        if(total.contains("Couldn't create window") || total.contains("OpenGL 2.0 or higher") || total.toLowerCase().contains("pixel format") || total.contains("GLEW")|| total.contains("unsupported combination of formats")){
 
             dialog.get(() -> message(
                 total.contains("Couldn't create window") ? "A graphics initialization error has occured! Try to update your graphics drivers:\n" + finalMessage :
-                            "Your graphics card does not support OpenGL 2.0 with the framebuffer_object extension!\n" +
+                            "Your graphics card does not support the right OpenGL features.\n" +
                                     "Try to update your graphics drivers. If this doesn't work, your computer may not support Mindustry.\n\n" +
                                     "Full message: " + finalMessage));
             badGPU = true;
@@ -229,7 +228,9 @@ public class DesktopLauncher extends ClientLauncher{
 
     @Override
     public void updateLobby(){
-        SVars.net.updateLobby();
+        if(SVars.net != null){
+            SVars.net.updateLobby();
+        }
     }
 
     @Override
@@ -246,7 +247,7 @@ public class DesktopLauncher extends ClientLauncher{
 
         if(inGame){
             //TODO implement nice name for sector
-            gameMapWithWave = Strings.capitalize(state.map.name());
+            gameMapWithWave = Strings.capitalize(Strings.stripColors(state.map.name()));
 
             if(state.rules.waves){
                 gameMapWithWave += " | Wave " + state.wave;
@@ -307,23 +308,7 @@ public class DesktopLauncher extends ClientLauncher{
             }
         }
 
-        try{
-            Enumeration<NetworkInterface> e = NetworkInterface.getNetworkInterfaces();
-            NetworkInterface out;
-            for(out = e.nextElement(); (out.getHardwareAddress() == null || out.isVirtual() || !validAddress(out.getHardwareAddress())) && e.hasMoreElements(); out = e.nextElement());
-
-            byte[] bytes = out.getHardwareAddress();
-            byte[] result = new byte[8];
-            System.arraycopy(bytes, 0, result, 0, bytes.length);
-
-            String str = new String(Base64Coder.encode(result));
-
-            if(str.equals("AAAAAAAAAOA=") || str.equals("AAAAAAAAAAA=")) throw new RuntimeException("Bad UUID.");
-
-            return str;
-        }catch(Exception e){
-            return super.getUUID();
-        }
+        return super.getUUID();
     }
 
     private static void message(String message){

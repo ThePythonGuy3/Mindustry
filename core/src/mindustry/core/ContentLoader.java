@@ -1,20 +1,21 @@
 package mindustry.core;
 
+import arc.*;
 import arc.files.*;
-import arc.struct.*;
 import arc.func.*;
 import arc.graphics.*;
-import arc.util.ArcAnnotate.*;
+import arc.struct.*;
 import arc.util.*;
 import mindustry.content.*;
 import mindustry.ctype.*;
+import mindustry.game.EventType.*;
 import mindustry.entities.bullet.*;
 import mindustry.mod.Mods.*;
 import mindustry.type.*;
 import mindustry.world.*;
 
-import static arc.Core.files;
-import static mindustry.Vars.mods;
+import static arc.Core.*;
+import static mindustry.Vars.*;
 
 /**
  * Loads all game content.
@@ -33,6 +34,7 @@ public class ContentLoader{
         new StatusEffects(),
         new Liquids(),
         new Bullets(),
+        new AmmoTypes(),
         new UnitTypes(),
         new Blocks(),
         new Loadouts(),
@@ -96,6 +98,8 @@ public class ContentLoader{
     /** Calls Content#init() on everything. Use only after all modules have been created.*/
     public void init(){
         initialize(Content::init);
+        if(constants != null) constants.init();
+        Events.fire(new ContentInitEvent());
     }
 
     /** Calls Content#load() on everything. Use only after all modules have been created on the client.*/
@@ -160,8 +164,8 @@ public class ContentLoader{
     public void removeLast(){
         if(lastAdded != null && contentMap[lastAdded.getContentType().ordinal()].peek() == lastAdded){
             contentMap[lastAdded.getContentType().ordinal()].pop();
-            if(lastAdded instanceof MappableContent){
-                contentNameMap[lastAdded.getContentType().ordinal()].remove(((MappableContent)lastAdded).name);
+            if(lastAdded instanceof MappableContent c){
+                contentNameMap[lastAdded.getContentType().ordinal()].remove(c.name);
             }
         }
     }
@@ -243,11 +247,11 @@ public class ContentLoader{
     }
 
     public Block block(int id){
-        return (Block)getByID(ContentType.block, id);
+        return getByID(ContentType.block, id);
     }
 
     public Block block(String name){
-        return (Block)getByName(ContentType.block, name);
+        return getByName(ContentType.block, name);
     }
 
     public Seq<Item> items(){
@@ -255,7 +259,7 @@ public class ContentLoader{
     }
 
     public Item item(int id){
-        return (Item)getByID(ContentType.item, id);
+        return getByID(ContentType.item, id);
     }
 
     public Seq<Liquid> liquids(){
@@ -263,7 +267,7 @@ public class ContentLoader{
     }
 
     public Liquid liquid(int id){
-        return (Liquid)getByID(ContentType.liquid, id);
+        return getByID(ContentType.liquid, id);
     }
 
     public Seq<BulletType> bullets(){
@@ -271,7 +275,11 @@ public class ContentLoader{
     }
 
     public BulletType bullet(int id){
-        return (BulletType)getByID(ContentType.bullet, id);
+        return getByID(ContentType.bullet, id);
+    }
+
+    public Seq<StatusEffect> statusEffects(){
+        return getBy(ContentType.status);
     }
 
     public Seq<SectorPreset> sectors(){

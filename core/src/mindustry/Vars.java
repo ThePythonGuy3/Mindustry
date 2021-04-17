@@ -10,14 +10,14 @@ import arc.util.*;
 import arc.util.Log.*;
 import mindustry.ai.*;
 import mindustry.async.*;
-import mindustry.audio.*;
 import mindustry.core.*;
 import mindustry.entities.*;
-import mindustry.game.*;
 import mindustry.game.EventType.*;
+import mindustry.game.*;
 import mindustry.gen.*;
 import mindustry.input.*;
 import mindustry.io.*;
+import mindustry.logic.*;
 import mindustry.maps.Map;
 import mindustry.maps.*;
 import mindustry.mod.*;
@@ -32,38 +32,46 @@ import java.util.*;
 import static arc.Core.*;
 
 public class Vars implements Loadable{
+    /** Whether the game failed to launch last time. */
+    public static boolean failedToLaunch = false;
     /** Whether to load locales.*/
     public static boolean loadLocales = true;
     /** Whether the logger is loaded. */
     public static boolean loadedLogger = false, loadedFileLogger = false;
+    /** Whether to enable various experimental features (e.g. cliffs) */
+    public static boolean experimental = false;
+    /** Name of current Steam player. */
+    public static String steamPlayerName = "";
     /** Maximum extra padding around deployment schematics. */
-    public static final int maxLoadoutSchematicPad = 4;
+    public static final int maxLoadoutSchematicPad = 5;
     /** Maximum schematic size.*/
     public static final int maxSchematicSize = 32;
     /** All schematic base64 starts with this string.*/
-    public static final String schematicBaseStart ="bXNjaAB";
+    public static final String schematicBaseStart ="bXNjaA";
     /** IO buffer size. */
     public static final int bufferSize = 8192;
     /** global charset, since Android doesn't support the Charsets class */
     public static final Charset charset = Charset.forName("UTF-8");
     /** main application name, capitalized */
     public static final String appName = "Mindustry";
-    /** URL for itch.io donations. */
-    public static final String donationURL = "https://anuke.itch.io/mindustry/purchase";
+    /** Github API URL. */
+    public static final String ghApi = "https://api.github.com";
     /** URL for discord invite. */
     public static final String discordURL = "https://discord.gg/mindustry";
-    /** URL for sending crash reports to */
+    /** URL for sending crash reports to. Currently offline. */
     public static final String crashReportURL = "http://192.99.169.18/report";
     /** URL the links to the wiki's modding guide.*/
-    public static final String modGuideURL = "https://mindustrygame.github.io/wiki/modding/";
-    /** URL to the JSON file containing all the global, public servers. Not queried in BE. */
-    public static final String serverJsonURL = "https://raw.githubusercontent.com/Anuken/Mindustry/master/servers.json";
+    public static final String modGuideURL = "https://mindustrygame.github.io/wiki/modding/1-modding/";
     /** URL to the JSON file containing all the BE servers. Only queried in BE. */
     public static final String serverJsonBeURL = "https://raw.githubusercontent.com/Anuken/Mindustry/master/servers_be.json";
+    /** URL to the JSON file containing all the stable servers.  */
+    public static final String serverJsonURL = "https://raw.githubusercontent.com/Anuken/Mindustry/master/servers_v6.json";
     /** URL of the github issue report template.*/
-    public static final String reportIssueURL = "https://github.com/Anuken/Mindustry/issues/new?template=bug_report.md";
+    public static final String reportIssueURL = "https://github.com/Anuken/Mindustry/issues/new?labels=bug&template=bug_report.md";
     /** list of built-in servers.*/
-    public static final Seq<String> defaultServers = Seq.with();
+    public static final Seq<ServerGroup> defaultServers = Seq.with();
+    /** maximum size of any block, do not change unless you know what you're doing */
+    public static final int maxBlockSize = 16;
     /** maximum distance between mine and core that supports automatic transferring */
     public static final float mineTransferRange = 220f;
     /** max chat message length */
@@ -74,24 +82,30 @@ public class Vars implements Loadable{
     public static final float itemSize = 5f;
     /** units outside of this bound will die instantly */
     public static final float finalWorldBounds = 500;
-    /** mining range for manual miners */
-    public static final float miningRange = 70f;
     /** range for building */
     public static final float buildingRange = 220f;
+    /** range for moving items */
+    public static final float itemTransferRange = 220f;
+    /** range for moving items for logic units */
+    public static final float logicItemTransferRange = 45f;
     /** duration of time between turns in ticks */
-    public static final float turnDuration = 20 * Time.toMinutes;
-    /** turns needed to destroy a sector completely */
-    public static final float sectorDestructionTurns = 3f;
+    public static final float turnDuration = 2 * Time.toMinutes;
+    /** chance of an invasion per turn, 1 = 100% */
+    public static final float baseInvasionChance = 1f / 100f;
+    /** how many minutes have to pass before invasions in a *captured* sector start */
+    public static final float invasionGracePeriod = 20;
     /** min armor fraction damage; e.g. 0.05 = at least 5% damage */
-    public static final float minArmorDamage = 0.05f;
+    public static final float minArmorDamage = 0.1f;
     /** launch animation duration */
     public static final float launchDuration = 140f;
+    /** size of tiles in units */
+    public static final int tilesize = 8;
+    /** size of one tile payload (^2) */
+    public static final float tilePayload = tilesize * tilesize;
     /** tile used in certain situations, instead of null */
     public static Tile emptyTile;
     /** for map generator dialog */
     public static boolean updateEditorOnChange = false;
-    /** size of tiles in units */
-    public static final int tilesize = 8;
     /** all choosable player colors in join/host dialog */
     public static final Color[] playerColors = {
         Color.valueOf("82759a"),
@@ -158,6 +172,8 @@ public class Vars implements Loadable{
     public static Fi schematicDirectory;
     /** data subdirectory used for bleeding edge build versions */
     public static Fi bebuildDirectory;
+    /** file used to store launch ID */
+    public static Fi launchIDFile;
     /** empty map, indicates no current map */
     public static Map emptyMap;
     /** map file extension */
@@ -175,15 +191,14 @@ public class Vars implements Loadable{
     public static ContentLoader content;
     public static GameState state;
     public static EntityCollisions collisions;
-    public static DefaultWaves defaultWaves;
-    public static mindustry.audio.LoopControl loops;
+    public static Waves waves;
     public static Platform platform = new Platform(){};
     public static Mods mods;
     public static Schematics schematics;
     public static BeControl becontrol;
     public static AsyncCore asyncCore;
-    public static TeamIndexProcess teamIndex;
     public static BaseRegistry bases;
+    public static GlobalConstants constants;
 
     public static Universe universe;
     public static World world;
@@ -199,8 +214,7 @@ public class Vars implements Loadable{
     public static NetServer netServer;
     public static NetClient netClient;
 
-    public static
-    Player player;
+    public static Player player;
 
     @Override
     public void loadAsync(){
@@ -225,6 +239,7 @@ public class Vars implements Loadable{
             }
 
             Arrays.sort(locales, Structs.comparing(l -> l.getDisplayName(l), String.CASE_INSENSITIVE_ORDER));
+            locales = Seq.with(locales).and(new Locale("router")).toArray(Locale.class);
         }
 
         Version.init();
@@ -245,8 +260,7 @@ public class Vars implements Loadable{
         if(mods == null) mods = new Mods();
 
         content = new ContentLoader();
-        loops = new LoopControl();
-        defaultWaves = new DefaultWaves();
+        waves = new Waves();
         collisions = new EntityCollisions();
         world = new World();
         universe = new Universe();
@@ -258,6 +272,7 @@ public class Vars implements Loadable{
         indexer = new BlockIndexer();
         pathfinder = new Pathfinder();
         bases = new BaseRegistry();
+        constants = new GlobalConstants();
 
         state = new GameState();
 
@@ -271,14 +286,35 @@ public class Vars implements Loadable{
         maps.load();
     }
 
+    /** Checks if a launch failure occurred.
+     * If this is the case, failedToLaunch is set to true. */
+    public static void checkLaunch(){
+        settings.setAppName(appName);
+        launchIDFile = settings.getDataDirectory().child("launchid.dat");
+
+        if(launchIDFile.exists()){
+            failedToLaunch = true;
+        }else{
+            failedToLaunch = false;
+            launchIDFile.writeString("go away");
+        }
+    }
+
+    /** Cleans up after a successful launch. */
+    public static void finishLaunch(){
+        if(launchIDFile != null){
+            launchIDFile.delete();
+        }
+    }
+
     public static void loadLogger(){
         if(loadedLogger) return;
 
         String[] tags = {"[green][D][]", "[royal][I][]", "[yellow][W][]", "[scarlet][E][]", ""};
-        String[] stags = {"&lc&fb[D]", "&lg&fb[I]", "&ly&fb[W]", "&lr&fb[E]", ""};
+        String[] stags = {"&lc&fb[D]", "&lb&fb[I]", "&ly&fb[W]", "&lr&fb[E]", ""};
 
         Seq<String> logBuffer = new Seq<>();
-        Log.setLogger((level, text) -> {
+        Log.logger = (level, text) -> {
             String result = text;
             String rawText = Log.format(stags[level.ordinal()] + "&fr " + text);
             System.out.println(rawText);
@@ -294,9 +330,9 @@ public class Vars implements Loadable{
                     }
                 }
 
-                ui.scriptfrag.addMessage(Log.removeCodes(result));
+                ui.scriptfrag.addMessage(Log.removeColors(result));
             }
-        });
+        };
 
         Events.on(ClientLoadEvent.class, e -> logBuffer.each(ui.scriptfrag::addMessage));
 
@@ -308,25 +344,31 @@ public class Vars implements Loadable{
 
         settings.setAppName(appName);
 
-        Writer writer = settings.getDataDirectory().child("last_log.txt").writer(false);
-        LogHandler log = Log.getLogger();
-        Log.setLogger((level, text) -> {
-            log.log(level, text);
+        try{
+            Writer writer = settings.getDataDirectory().child("last_log.txt").writer(false);
+            LogHandler log = Log.logger;
+            //ignore it
+            Log.logger = (level, text) -> {
+                log.log(level, text);
 
-            try{
-                writer.write("[" + Character.toUpperCase(level.name().charAt(0)) +"] " + Log.removeCodes(text) + "\n");
-                writer.flush();
-            }catch(IOException e){
-                e.printStackTrace();
-                //ignore it
-            }
-        });
+                try{
+                    writer.write("[" + Character.toUpperCase(level.name().charAt(0)) +"] " + Log.removeColors(text) + "\n");
+                    writer.flush();
+                }catch(IOException e){
+                    e.printStackTrace();
+                    //ignore it
+                }
+            };
+        }catch(Exception e){
+            //handle log file not being found
+            Log.err(e);
+        }
 
         loadedFileLogger = true;
     }
 
     public static void loadSettings(){
-        settings.setJson(JsonIO.json());
+        settings.setJson(JsonIO.json);
         settings.setAppName(appName);
 
         if(steam || (Version.modifier != null && Version.modifier.contains("steam"))){
@@ -376,6 +418,11 @@ public class Vars implements Loadable{
 
             Locale.setDefault(locale);
             Core.bundle = I18NBundle.createBundle(handle, locale);
+
+            //router
+            if(locale.getDisplayName().equals("router")){
+                bundle.debug("router");
+            }
         }
     }
 }

@@ -39,7 +39,7 @@ public class MirrorFilter extends GenerateFilter{
             if(!tile.block().synthetic()){
                 in.block = tile.block();
             }
-            in.ore = tile.overlay();
+            in.overlay = tile.overlay();
         }
     }
 
@@ -52,15 +52,13 @@ public class MirrorFilter extends GenerateFilter{
         float imageHeight = Math.max(vsize.y, vsize.x);
 
         float size = Math.max(image.getWidth() *2, image.getHeight()*2);
-        Cons<Vec2> clamper = v ->
-            v.clamp(
-                image.getX() + image.getWidth()/2f - imageWidth/2f,
-                image.getX() + image.getWidth()/2f + imageWidth/2f,
-                image.getY() + image.getHeight()/2f - imageHeight/2f,
-                image.getY() + image.getHeight()/2f + imageHeight/2f);
+        Cons<Vec2> clamper = v -> v.clamp(
+            image.x + image.getWidth()/2f - imageWidth/2f,
+        image.y + image.getHeight()/2f - imageHeight/2f, image.y + image.getHeight()/2f + imageHeight/2f, image.x + image.getWidth()/2f + imageWidth/2f
+        );
 
-        clamper.get(Tmp.v1.trns(angle - 90, size).add(image.getWidth()/2f + image.getX(), image.getHeight()/2f + image.getY()));
-        clamper.get(Tmp.v2.set(Tmp.v1).sub(image.getWidth()/2f + image.getX(), image.getHeight()/2f + image.getY()).rotate(180f).add(image.getWidth()/2f + image.getX(), image.getHeight()/2f + image.getY()));
+        clamper.get(Tmp.v1.trns(angle - 90, size).add(image.getWidth()/2f + image.x, image.getHeight()/2f + image.y));
+        clamper.get(Tmp.v2.set(Tmp.v1).sub(image.getWidth()/2f + image.x, image.getHeight()/2f + image.y).rotate(180f).add(image.getWidth()/2f + image.x, image.getHeight()/2f + image.y));
 
         Lines.stroke(Scl.scl(3f), Pal.accent);
         Lines.line(Tmp.v1.x, Tmp.v1.y, Tmp.v2.x, Tmp.v2.y);
@@ -70,8 +68,8 @@ public class MirrorFilter extends GenerateFilter{
     void mirror(Vec2 p, float x0, float y0, float x1, float y1){
         //special case: uneven map mirrored at 45 degree angle
         if(in.width != in.height && angle % 90 != 0){
-            p.x = (p.x - in.width/2f) * -1 + in.width/2f;
-            p.y = (p.y - in.height/2f) * -1 + in.height/2f;
+            p.x = in.width - p.x - 1;
+            p.y = in.height - p.y - 1;
         }else{
             float dx = x1 - x0;
             float dy = y1 - y0;

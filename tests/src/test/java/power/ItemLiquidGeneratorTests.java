@@ -8,6 +8,7 @@ import mindustry.game.*;
 import mindustry.type.*;
 import mindustry.world.*;
 import mindustry.world.blocks.power.*;
+import mindustry.world.blocks.power.ItemLiquidGenerator.*;
 import org.junit.jupiter.api.*;
 
 import java.util.*;
@@ -26,19 +27,19 @@ public class ItemLiquidGeneratorTests extends PowerTestFixture{
 
     private ItemLiquidGenerator generator;
     private Tile tile;
-    private ItemLiquidGenerator.ItemLiquidGeneratorEntity entity;
+    private ItemLiquidGeneratorBuild entity;
     private final float fakeItemDuration = 60f; //ticks
     private final float maximumLiquidUsage = 0.5f;
 
     public void createGenerator(InputType inputType){
         Vars.state = new GameState();
         Vars.state.rules = new Rules();
-        generator = new ItemLiquidGenerator(inputType != InputType.liquids, inputType != InputType.items, "fakegen"){
+        generator = new ItemLiquidGenerator(inputType != InputType.liquids, inputType != InputType.items, "fakegen" + System.nanoTime()){
             {
                 powerProduction = 0.1f;
                 itemDuration = fakeItemDuration;
                 maxLiquidGenerate = maximumLiquidUsage;
-                entityType = ItemLiquidGeneratorEntity::new;
+                buildType = ItemLiquidGeneratorBuild::new;
             }
 
             @Override
@@ -53,7 +54,7 @@ public class ItemLiquidGeneratorTests extends PowerTestFixture{
         };
 
         tile = createFakeTile(0, 0, generator);
-        entity = tile.bc();
+        entity = (ItemLiquidGeneratorBuild)tile.build;
     }
 
     /** Tests the consumption and efficiency when being supplied with liquids. */
@@ -86,10 +87,10 @@ public class ItemLiquidGeneratorTests extends PowerTestFixture{
         final float expectedRemainingLiquidAmount = Math.max(0.0f, availableLiquidAmount - expectedConsumptionPerTick * Time.delta);
 
         createGenerator(inputType);
-        assertTrue(entity.acceptLiquid(null, liquid, availableLiquidAmount), inputType + " | " + parameterDescription + ": Liquids which will be declined by the generator don't need to be tested - The code won't be called for those cases.");
+        assertTrue(entity.acceptLiquid(null, liquid), inputType + " | " + parameterDescription + ": Liquids which will be declined by the generator don't need to be tested - The code won't be called for those cases.");
 
         entity.liquids.add(liquid, availableLiquidAmount);
-        entity.cons().update();
+        entity.cons.update();
 
         // Perform an update on the generator once - This should use up any resource up to the maximum liquid usage
         entity.updateTile();
@@ -133,7 +134,7 @@ public class ItemLiquidGeneratorTests extends PowerTestFixture{
         if(amount > 0){
             entity.items.add(item, amount);
         }
-        entity.cons().update();
+        entity.cons.update();
 
         // Perform an update on the generator once - This should use up one or zero items - dependent on if the item is accepted and available or not.
         try{
@@ -164,7 +165,7 @@ public class ItemLiquidGeneratorTests extends PowerTestFixture{
 
         // Burn a single coal and test for the duration
         entity.items.add(Items.coal, 1);
-        entity.cons().update();
+        entity.cons.update();
         entity.updateTile();
 
         float expectedEfficiency = entity.productionEfficiency;

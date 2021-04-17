@@ -1,15 +1,14 @@
 package mindustry.world.consumers;
 
-import arc.struct.*;
 import arc.scene.ui.layout.*;
-import arc.util.ArcAnnotate.*;
+import arc.struct.*;
 import mindustry.gen.*;
 import mindustry.type.*;
 import mindustry.ui.*;
 import mindustry.world.meta.*;
 
 public class ConsumeLiquid extends ConsumeLiquidBase{
-    public final @NonNull Liquid liquid;
+    public final Liquid liquid;
 
     public ConsumeLiquid(Liquid liquid, float amount){
         super(amount);
@@ -42,11 +41,11 @@ public class ConsumeLiquid extends ConsumeLiquidBase{
 
     @Override
     public boolean valid(Building entity){
-        return entity != null && entity.liquids != null && entity.liquids.get(liquid) >= use(entity);
+        return entity != null && entity.liquids != null && entity.liquids.get(liquid) >= amount * entity.delta();
     }
 
     @Override
-    public void display(BlockStats stats){
-        stats.add(booster ? BlockStat.booster : BlockStat.input, liquid, amount * timePeriod, timePeriod == 60);
+    public void display(Stats stats){
+        stats.add(booster ? Stat.booster : Stat.input, liquid, amount * 60f, true);
     }
 }

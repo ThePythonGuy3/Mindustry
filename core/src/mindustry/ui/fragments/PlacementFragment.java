@@ -10,7 +10,6 @@ import arc.scene.style.*;
 import arc.scene.ui.*;
 import arc.scene.ui.layout.*;
 import arc.struct.*;
-import arc.util.ArcAnnotate.*;
 import arc.util.*;
 import mindustry.core.*;
 import mindustry.entities.*;
@@ -22,6 +21,7 @@ import mindustry.input.*;
 import mindustry.type.*;
 import mindustry.ui.*;
 import mindustry.world.*;
+import mindustry.world.blocks.ConstructBlock.*;
 
 import static mindustry.Vars.*;
 
@@ -29,7 +29,8 @@ public class PlacementFragment extends Fragment{
     final int rowWidth = 4;
 
     public Category currentCategory = Category.distribution;
-    Seq<Block> returnArray = new Seq<>();
+
+    Seq<Block> returnArray = new Seq<>(), returnArray2 = new Seq<>();
     Seq<Category> returnCatArray = new Seq<>();
     boolean[] categoryEmpty = new boolean[Category.all.length];
     ObjectMap<Category,Block> selectedBlocks = new ObjectMap<>();
@@ -79,6 +80,10 @@ public class PlacementFragment extends Fragment{
         });
     }
 
+    public Displayable hover(){
+        return hover;
+    }
+
     void rebuild(){
         currentCategory = Category.turret;
         Group group = toggler.parent;
@@ -91,12 +96,12 @@ public class PlacementFragment extends Fragment{
     boolean gridUpdate(InputHandler input){
         scrollPositions.put(currentCategory, blockPane.getScrollY());
 
-        if(Core.input.keyDown(Binding.pick) && player.isBuilder()){ //mouse eyedropper select
-            Building tile = world.buildWorld(Core.input.mouseWorld().x, Core.input.mouseWorld().y);
-            Block tryRecipe = tile == null ? null : tile.block();
-            Object tryConfig = tile == null ? null : tile.config();
+        if(Core.input.keyTap(Binding.pick) && player.isBuilder()){ //mouse eyedropper select
+            var build = world.buildWorld(Core.input.mouseWorld().x, Core.input.mouseWorld().y);
+            Block tryRecipe = build == null ? null : build instanceof ConstructBuild c ? c.cblock : build.block;
+            Object tryConfig = build == null || !build.block.copyConfig ? null : build.config();
 
-            for(BuildPlan req : player.builder().plans()){
+            for(BuildPlan req : player.unit().plans()){
                 if(!req.breaking && req.block.bounds(req.x, req.y, Tmp.r1).contains(Core.input.mouseWorld())){
                     tryRecipe = req.block;
                     tryConfig = req.config;
@@ -116,31 +121,30 @@ public class PlacementFragment extends Fragment{
 
         for(int i = 0; i < blockSelect.length; i++){
             if(Core.input.keyTap(blockSelect[i])){
-                if(i > 9) { //select block directionally
+                if(i > 9){ //select block directionally
                     Seq<Block> blocks = getUnlockedByCategory(currentCategory);
                     Block currentBlock = getSelectedBlock(currentCategory);
                     for(int j = 0; j < blocks.size; j++){
                         if(blocks.get(j) == currentBlock){
                             switch(i){
-                                case 10: //left
-                                    j = (j - 1 + blocks.size) % blocks.size;
-                                    break;
-                                case 11: //right
-                                    j = (j + 1) % blocks.size;
-                                    break;
-                                case 12: //up
+                                //left
+                                case 10 -> j = (j - 1 + blocks.size) % blocks.size;
+                                //right
+                                case 11 -> j = (j + 1) % blocks.size;
+                                //up
+                                case 12 -> {
                                     j = (j > 3 ? j - 4 : blocks.size - blocks.size % 4 + j);
                                     j -= (j < blocks.size ? 0 : 4);
-                                    break;
-                                case 13: //down
-                                    j = (j < blocks.size - 4 ? j + 4 : j % 4);
+                                }
+                                //down
+                                case 13 -> j = (j < blocks.size - 4 ? j + 4 : j % 4);
                             }
                             input.block = blocks.get(j);
                             selectedBlocks.put(currentCategory, input.block);
                             break;
                         }
                     }
-                }else if(blockSelectEnd || Time.timeSinceMillis(blockSelectSeqMillis) > Core.settings.getInt("blockselecttimeout")){ //1st number of combo, select category
+                }else if(blockSelectEnd || Time.timeSinceMillis(blockSelectSeqMillis) > 400){ //1st number of combo, select category
                     //select only visible categories
                     if(!getUnlockedByCategory(Category.all[i]).isEmpty()){
                         currentCategory = Category.all[i];
@@ -160,7 +164,7 @@ public class PlacementFragment extends Fragment{
                         blockSelectEnd = true;
                     }
                     Seq<Block> blocks = getByCategory(currentCategory);
-                    if(!unlocked(blocks.get(i))) return true;
+                    if(i >= blocks.size || !unlocked(blocks.get(i))) return true;
                     input.block = (i < blocks.size) ? blocks.get(i) : null;
                     selectedBlocks.put(currentCategory, input.block);
                     blockSelectSeqMillis = Time.millis();
@@ -185,6 +189,14 @@ public class PlacementFragment extends Fragment{
             return true;
         }
 
+        if(Core.input.keyTap(Binding.block_info)){
+            Block displayBlock = menuHoverBlock != null ? menuHoverBlock : input.block;
+            if(displayBlock != null){
+                ui.content.show(displayBlock);
+                Events.fire(new BlockInfoEvent());
+            }
+        }
+
         return false;
     }
 
@@ -192,7 +204,7 @@ public class PlacementFragment extends Fragment{
     public void build(Group parent){
         parent.fill(full -> {
             toggler = full;
-            full.bottom().right().visible(() -> ui.hudfrag.shown());
+            full.bottom().right().visible(() -> ui.hudfrag.shown);
 
             full.table(frame -> {
 
@@ -216,7 +228,7 @@ public class PlacementFragment extends Fragment{
                             if(unlocked(block)){
                                 if(Core.input.keyDown(KeyCode.shiftLeft) && Fonts.getUnicode(block.name) != 0){
                                     Core.app.setClipboardText((char)Fonts.getUnicode(block.name) + "");
-                                    ui.showInfoFade("$copied");
+                                    ui.showInfoFade("@copied");
                                 }else{
                                     control.input.block = control.input.block == block ? null : block;
                                     selectedBlocks.put(currentCategory, control.input.block);
@@ -284,7 +296,7 @@ public class PlacementFragment extends Fragment{
 
                             topTable.table(header -> {
                                 String keyCombo = "";
-                                if(!mobile && Core.settings.getBool("blockselectkeys")){
+                                if(!mobile){
                                     Seq<Block> blocks = getByCategory(currentCategory);
                                     for(int i = 0; i < blocks.size; i++){
                                         if(blocks.get(i) == displayBlock && (i + 1) / 10 - 1 < blockSelect.length){
@@ -324,7 +336,7 @@ public class PlacementFragment extends Fragment{
 
                                             int amount = core.items.get(stack.item);
                                             int stackamount = Math.round(stack.amount * state.rules.buildCostMultiplier);
-                                            String color = (amount < stackamount / 2f ? "[red]" : amount < stackamount ? "[accent]" : "[white]");
+                                            String color = (amount < stackamount / 2f ? "[scarlet]" : amount < stackamount ? "[accent]" : "[white]");
 
                                             return color + UI.formatAmount(amount) + "[white]/" + stackamount;
                                         }).padLeft(5);
@@ -337,7 +349,7 @@ public class PlacementFragment extends Fragment{
                                 topTable.row();
                                 topTable.table(b -> {
                                     b.image(Icon.cancel).padRight(2).color(Color.scarlet);
-                                    b.add(!player.isBuilder() ? "$unit.nobuild" : displayBlock.unplaceableMessage()).width(190f).wrap();
+                                    b.add(!player.isBuilder() ? "@unit.nobuild" : "@banned").width(190f).wrap();
                                     b.left();
                                 }).padTop(2).left();
                             }
@@ -420,7 +432,7 @@ public class PlacementFragment extends Fragment{
     }
 
     Seq<Block> getUnlockedByCategory(Category cat){
-        return returnArray.selectFrom(content.blocks(), block -> block.category == cat && block.isVisible() && unlocked(block)).sort((b1, b2) -> Boolean.compare(!b1.isPlaceable(), !b2.isPlaceable()));
+        return returnArray2.selectFrom(content.blocks(), block -> block.category == cat && block.isVisible() && unlocked(block)).sort((b1, b2) -> Boolean.compare(!b1.isPlaceable(), !b2.isPlaceable()));
     }
 
     Block getSelectedBlock(Category cat){

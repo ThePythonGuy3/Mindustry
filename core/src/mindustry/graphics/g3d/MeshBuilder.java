@@ -1,14 +1,11 @@
 package mindustry.graphics.g3d;
 
 import arc.graphics.*;
-import arc.graphics.VertexAttributes.*;
-import arc.graphics.gl.*;
 import arc.math.geom.*;
-import arc.util.*;
 import mindustry.graphics.g3d.PlanetGrid.*;
 
 public class MeshBuilder{
-    private static final Vec3 v1 = new Vec3(), v2 = new Vec3(), v3 = new Vec3();
+    private static final Vec3 v1 = new Vec3(), v2 = new Vec3(), v3 = new Vec3(), v4 = new Vec3();
     private static final float[] floats = new float[3 + 3 + 1];
     private static Mesh mesh;
 
@@ -78,8 +75,6 @@ public class MeshBuilder{
 
                 if(c.length > 5){
                     verts(c[0].v, c[4].v, c[5].v, nor, color);
-                }else{
-                    verts(c[0].v, c[3].v, c[4].v, nor, color);
                 }
             }
 
@@ -95,9 +90,9 @@ public class MeshBuilder{
 
     private static void begin(int count){
         mesh = new Mesh(true, count, 0,
-        new VertexAttribute(Usage.position, 3, Shader.positionAttribute),
-        new VertexAttribute(Usage.normal, 3, Shader.normalAttribute),
-        new VertexAttribute(Usage.colorPacked, 4, Shader.colorAttribute)
+        VertexAttribute.position3,
+        VertexAttribute.normal,
+        VertexAttribute.color
         );
 
         mesh.getVerticesBuffer().limit(mesh.getMaxVertices());
@@ -106,12 +101,13 @@ public class MeshBuilder{
 
     private static Mesh end(){
         Mesh last = mesh;
+        last.getVerticesBuffer().limit(last.getVerticesBuffer().position());
         mesh = null;
         return last;
     }
 
     private static Vec3 normal(Vec3 v1, Vec3 v2, Vec3 v3){
-        return Tmp.v32.set(v2).sub(v1).crs(v3.x - v1.x, v3.y - v1.y, v3.z - v1.z).nor();
+        return v4.set(v2).sub(v1).crs(v3.x - v1.x, v3.y - v1.y, v3.z - v1.z).nor();
     }
 
     private static void verts(Vec3 a, Vec3 b, Vec3 c, Vec3 normal, Color color){

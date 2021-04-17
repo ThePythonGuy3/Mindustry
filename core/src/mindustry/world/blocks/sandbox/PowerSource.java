@@ -4,6 +4,8 @@ import mindustry.world.blocks.power.*;
 
 public class PowerSource extends PowerNode{
 
+    public float powerProduction = 10000f;
+
     public PowerSource(String name){
         super(name);
         maxNodes = 100;
@@ -11,10 +13,10 @@ public class PowerSource extends PowerNode{
         consumesPower = false;
     }
 
-    public class PowerSourceEntity extends PowerNodeEntity{
+    public class PowerSourceBuild extends PowerNodeBuild{
         @Override
         public float getPowerProduction(){
-            return 10000f;
+            return enabled ? powerProduction : 0f;
         }
     }
 

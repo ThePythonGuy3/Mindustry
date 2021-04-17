@@ -6,7 +6,7 @@ import mindustry.type.*;
 import mindustry.world.blocks.distribution.*;
 import mindustry.world.meta.*;
 
-import static mindustry.Vars.world;
+import static mindustry.Vars.*;
 
 public class LiquidBridge extends ItemBridge{
 
@@ -15,10 +15,11 @@ public class LiquidBridge extends ItemBridge{
         hasItems = false;
         hasLiquids = true;
         outputsLiquid = true;
+        canOverdrive = false;
         group = BlockGroup.liquids;
     }
 
-    public class LiquidBridgeEntity extends ItemBridgeEntity{
+    public class LiquidBridgeBuild extends ItemBridgeBuild{
         @Override
         public void updateTile(){
             time += cycleSpeed * delta();
@@ -28,9 +29,9 @@ public class LiquidBridge extends ItemBridge{
 
             Building other = world.build(link);
             if(other == null || !linkValid(tile, other.tile())){
-                dumpLiquid(liquids.current());
+                dumpLiquid(liquids.current(), 1f);
             }else{
-                ((ItemBridgeEntity)other).incoming.add(tile.pos());
+                ((ItemBridgeBuild)other).incoming.add(tile.pos());
 
                 if(consValid()){
                     float alpha = 0.04f;

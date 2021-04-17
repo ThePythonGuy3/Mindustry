@@ -1,11 +1,12 @@
 package mindustry.ai.types;
 
+import arc.math.*;
 import arc.math.geom.*;
-import arc.util.ArcAnnotate.*;
-import mindustry.*;
+import arc.util.*;
 import mindustry.ai.formations.*;
 import mindustry.entities.units.*;
 import mindustry.gen.*;
+import mindustry.world.blocks.storage.CoreBlock.*;
 
 public class FormationAI extends AIController implements FormationMember{
     public Unit leader;
@@ -25,39 +26,66 @@ public class FormationAI extends AIController implements FormationMember{
 
     @Override
     public void updateUnit(){
-        if(leader.dead){
+
+        if(leader == null || leader.dead){
             unit.resetController();
             return;
         }
 
-        unit.controlWeapons(leader.isRotate(), leader.isShooting);
-        // unit.moveAt(Tmp.v1.set(deltaX, deltaY).limit(unit.type().speed));
-        if(leader.isShooting){
-            unit.aimLook(leader.aimX(), leader.aimY());
-        }else{
-            if(!leader.moving() || !unit.type().rotateShooting){
-                if(unit.moving()){
-                    unit.lookAt(unit.vel.angle());
+        if(unit.type.canBoost){
+            unit.elevation = Mathf.approachDelta(unit.elevation, unit.onSolid() ? 1f : leader.type.canBoost ? leader.elevation : 0f, unit.type.riseSpeed);
+        }
+
+        unit.controlWeapons(true, leader.isShooting);
+
+        unit.aim(leader.aimX(), leader.aimY());
+
+        if(unit.type.rotateShooting){
+            unit.lookAt(leader.aimX(), leader.aimY());
+        }else if(unit.moving()){
+            unit.lookAt(unit.vel.angle());
+        }
+
+        Vec2 realtarget = vec.set(target).add(leader.vel);
+
+        float speed = unit.realSpeed() * Time.delta;
+        unit.approach(Mathf.arrive(unit.x, unit.y, realtarget.x, realtarget.y, unit.vel, speed, 0f, speed, 1f).scl(1f / Time.delta));
+
+        if(unit.canMine() && leader.canMine()){
+            if(leader.mineTile != null && unit.validMine(leader.mineTile)){
+                unit.mineTile(leader.mineTile);
+
+                CoreBuild core = unit.team.core();
+
+                if(core != null && leader.mineTile.drop() != null && unit.within(core, unit.type.range) && !unit.acceptsItem(leader.mineTile.drop())){
+                    if(core.acceptStack(unit.stack.item, unit.stack.amount, unit) > 0){
+                        Call.transferItemTo(unit, unit.stack.item, unit.stack.amount, unit.x, unit.y, core);
+
+                        unit.clearItem();
+                    }
                 }
             }else{
-                unit.lookAt(leader.rotation);
+                unit.mineTile(null);
             }
         }
 
-        Vec2 realtarget = vec.set(target);
-
-        if(unit.isGrounded() && Vars.world.raycast(unit.tileX(), unit.tileY(), leader.tileX(), leader.tileY(), Vars.world::solid)){
-            realtarget.set(Vars.pathfinder.getTargetTile(unit.tileOn(), unit.team, leader));
+        if(unit.canBuild() && leader.canBuild() && leader.activelyBuilding()){
+            unit.clearBuilding();
+            unit.addBuild(leader.buildPlan());
         }
-
-        unit.moveAt(realtarget.sub(unit).limit(unit.type().speed));
     }
 
     @Override
     public void removed(Unit unit){
         if(formation != null){
             formation.removeMember(this);
+            unit.resetController();
         }
+    }
+
+    @Override
+    public float formationSize(){
+        return unit.hitSize * 1.1f;
     }
 
     @Override

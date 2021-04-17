@@ -17,6 +17,22 @@ import static mindustry.Vars.*;
 
 public class Drawf{
 
+    public static void target(float x, float y, float rad, Color color){
+        target(x, y, rad, 1, color);
+    }
+
+    public static void target(float x, float y, float rad, float alpha, Color color){
+        Lines.stroke(3f);
+        Draw.color(Pal.gray, alpha);
+        Lines.poly(x, y, 4, rad, Time.time * 1.5f);
+        Lines.spikes(x, y, 3f/7f * rad, 6f/7f * rad, 4, Time.time * 1.5f);
+        Lines.stroke(1f);
+        Draw.color(color, alpha);
+        Lines.poly(x, y, 4, rad, Time.time * 1.5f);
+        Lines.spikes(x, y, 3f/7f * rad, 6f/7f * rad, 4, Time.time * 1.5f);
+        Draw.reset();
+    }
+
     public static float text(){
         float z = Draw.z();
         if(renderer.pixelator.enabled()){
@@ -51,7 +67,7 @@ public class Drawf{
     }
 
     private static boolean allowLight(Team team){
-        return team == Team.derelict || team == Vars.player.team() || state.rules.enemyLights;
+        return renderer != null && (team == Team.derelict || team == Vars.player.team() || state.rules.enemyLights);
     }
 
     public static void selected(Building tile, Color color){
@@ -84,6 +100,36 @@ public class Drawf{
         Draw.color();
     }
 
+    public static void shadow(TextureRegion region, float x, float y, float rotation){
+        Draw.color(Pal.shadow);
+        Draw.rect(region, x, y, rotation);
+        Draw.color();
+    }
+
+    public static void shadow(TextureRegion region, float x, float y){
+        Draw.color(Pal.shadow);
+        Draw.rect(region, x, y);
+        Draw.color();
+    }
+    
+    public static void shadow(TextureRegion region, float x, float y, float width, float height, float rotation){
+        Draw.color(Pal.shadow);
+        Draw.rect(region, x, y, width, height, rotation);
+        Draw.color();
+    }
+
+    public static void liquid(TextureRegion region, float x, float y, float alpha, Color color, float rotation){
+        Draw.color(color, alpha);
+        Draw.rect(region, x, y, rotation);
+        Draw.color();
+    }
+
+    public static void liquid(TextureRegion region, float x, float y, float alpha, Color color){
+        Draw.color(color, alpha);
+        Draw.rect(region, x, y);
+        Draw.color();
+    }
+
     public static void dashCircle(float x, float y, float rad, Color color){
         Lines.stroke(3f, Pal.gray);
         Lines.dashCircle(x, y, rad);
@@ -112,16 +158,24 @@ public class Drawf{
         Draw.reset();
     }
 
-    public static void square(float x, float y, float radius, Color color){
+    public static void square(float x, float y, float radius, float rotation, Color color){
         Lines.stroke(3f, Pal.gray);
-        Lines.square(x, y, radius + 1f, 45);
+        Lines.square(x, y, radius + 1f, rotation);
         Lines.stroke(1f, color);
-        Lines.square(x, y, radius + 1f, 45);
+        Lines.square(x, y, radius + 1f, rotation);
         Draw.reset();
     }
 
+    public static void square(float x, float y, float radius, float rotation){
+        square(x, y, radius, rotation, Pal.accent);
+    }
+
+    public static void square(float x, float y, float radius, Color color){
+        square(x, y, radius, 45, color);
+    }
+
     public static void square(float x, float y, float radius){
-        square(x, y, radius, Pal.accent);
+        square(x, y, radius, 45);
     }
 
     public static void arrow(float x, float y, float x2, float y2, float length, float radius){
@@ -150,15 +204,14 @@ public class Drawf{
     }
 
     public static void laser(Team team, TextureRegion line, TextureRegion edge, float x, float y, float x2, float y2, float rotation, float scale){
-        Tmp.v1.trns(rotation, 8f * scale * Draw.scl);
+        float scl = 8f * scale * Draw.scl;
+        float vx = Mathf.cosDeg(rotation) * scl, vy = Mathf.sinDeg(rotation) * scl;
 
-        Draw.rect(edge, x, y, edge.getWidth() * scale * Draw.scl, edge.getHeight() * scale * Draw.scl, rotation + 180);
-        Draw.rect(edge, x2, y2, edge.getWidth() * scale * Draw.scl, edge.getHeight() * scale * Draw.scl, rotation);
+        Draw.rect(edge, x, y, edge.width * scale * Draw.scl, edge.height * scale * Draw.scl, rotation + 180);
+        Draw.rect(edge, x2, y2, edge.width * scale * Draw.scl, edge.height * scale * Draw.scl, rotation);
 
         Lines.stroke(12f * scale);
-        Lines.precise(true);
-        Lines.line(line, x + Tmp.v1.x, y + Tmp.v1.y, x2 - Tmp.v1.x, y2 - Tmp.v1.y, CapStyle.none, 0f);
-        Lines.precise(false);
+        Lines.line(line, x + vx, y + vy, x2 - vx, y2 - vy, false);
         Lines.stroke(1f);
 
         light(team, x, y, x2, y2);
@@ -173,10 +226,32 @@ public class Drawf{
         construct(t, content.icon(Cicon.full), rotation, progress, speed, time);
     }
 
-    public static void construct(Building t, TextureRegion region, float rotation, float progress, float speed, float time){
+    public static void construct(float x, float y, TextureRegion region, float rotation, float progress, float speed, float time){
+        construct(x, y, region, Pal.accent, rotation, progress, speed, time);
+    }
+    
+    public static void construct(float x, float y, TextureRegion region, Color color, float rotation, float progress, float speed, float time){
         Shaders.build.region = region;
         Shaders.build.progress = progress;
-        Shaders.build.color.set(Pal.accent);
+        Shaders.build.color.set(color);
+        Shaders.build.color.a = speed;
+        Shaders.build.time = -time / 20f;
+
+        Draw.shader(Shaders.build);
+        Draw.rect(region, x, y, rotation);
+        Draw.shader();
+
+        Draw.reset();
+    }
+
+    public static void construct(Building t, TextureRegion region, float rotation, float progress, float speed, float time){
+        construct(t, region, Pal.accent, rotation, progress, speed, time);
+    }
+        
+    public static void construct(Building t, TextureRegion region, Color color, float rotation, float progress, float speed, float time){
+        Shaders.build.region = region;
+        Shaders.build.progress = progress;
+        Shaders.build.color.set(color);
         Shaders.build.color.a = speed;
         Shaders.build.time = -time / 20f;
 
@@ -187,7 +262,7 @@ public class Drawf{
         Draw.color(Pal.accent);
         Draw.alpha(speed);
 
-        Lines.lineAngleCenter(t.x + Mathf.sin(time, 20f, Vars.tilesize / 2f * t.block().size - 2f), t.y, 90, t.block().size * Vars.tilesize - 4f);
+        Lines.lineAngleCenter(t.x + Mathf.sin(time, 20f, Vars.tilesize / 2f * t.block.size - 2f), t.y, 90, t.block.size * Vars.tilesize - 4f);
 
         Draw.reset();
     }

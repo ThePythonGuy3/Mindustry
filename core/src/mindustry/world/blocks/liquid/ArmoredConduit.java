@@ -11,29 +11,31 @@ public class ArmoredConduit extends Conduit{
 
     public ArmoredConduit(String name){
         super(name);
-        leakResistance = 10f;
+        leaks = false;
     }
 
     @Override
     public boolean blends(Tile tile, int rotation, int otherx, int othery, int otherrot, Block otherblock){
-        return otherblock.outputsLiquid && blendsArmored(tile, rotation, otherx, othery, otherrot, otherblock);
+        return (otherblock.outputsLiquid && blendsArmored(tile, rotation, otherx, othery, otherrot, otherblock)) ||
+            (lookingAt(tile, rotation, otherx, othery, otherblock) && otherblock.hasLiquids);
     }
 
-    public class ArmoredConduitEntity extends ConduitEntity{
+    public class ArmoredConduitBuild extends ConduitBuild{
         @Override
         public void draw(){
             super.draw();
 
-            // draw the cap when a conduit would normally leak
-            Building next = tile.front();
-            if(next != null && next.team() == team && next.block().hasLiquids) return;
+            //draw the cap when a conduit would normally leak
+            Building next = front();
+            if(next != null && next.team == team && next.block.hasLiquids) return;
 
-            Draw.rect(capRegion, x, y, tile.rotdeg());
+            Draw.rect(capRegion, x, y, rotdeg());
         }
 
         @Override
-        public boolean acceptLiquid(Building source, Liquid liquid, float amount){
-            return super.acceptLiquid(source, liquid, amount) && (source.block() instanceof Conduit) || Edges.getFacingEdge(source.tile(), tile).absoluteRelativeTo(tile.x, tile.y) == tile.rotation();
+        public boolean acceptLiquid(Building source, Liquid liquid){
+            return super.acceptLiquid(source, liquid) && (source.block instanceof Conduit ||
+                source.tile.absoluteRelativeTo(tile.x, tile.y) == rotation);
         }
     }
 }

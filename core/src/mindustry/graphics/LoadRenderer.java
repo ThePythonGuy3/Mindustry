@@ -35,11 +35,18 @@ public class LoadRenderer implements Disposable{
     private Mesh mesh = MeshBuilder.buildHex(colorRed, 2, true, 1f);
     private Camera3D cam = new Camera3D();
     private int lastLength = -1;
-    private FxProcessor fx = new FxProcessor(Format.rgba8888, 2, 2, false, true);
+    private FxProcessor fx;
     private WindowedMean renderTimes = new WindowedMean(20);
     private long lastFrameTime;
 
     {
+        //some systems don't support rgba8888 w/ a stencil buffer
+        try{
+            fx = new FxProcessor(Format.rgba8888, 2, 2, false, true);
+        }catch(Exception e){
+            fx = new FxProcessor(Format.rgb565, 2, 2, false, true);
+        }
+
         //vignetting is probably too much
         //fx.addEffect(new VignettingFilter(false));
         fx.addEffect(new BloomFilter());
@@ -47,8 +54,8 @@ public class LoadRenderer implements Disposable{
         bars = new Bar[]{
             new Bar("s_proc#", OS.cores / 16f, OS.cores < 4),
             new Bar("c_aprog", () -> assets != null, () -> assets.getProgress(), () -> false),
-            new Bar("g_vtype", graphics.getGLVersion().type == Type.GLES ? 0.5f : 1f, graphics.getGLVersion().type == Type.GLES),
-            new Bar("s_mem#", () -> true, () -> Core.app.getJavaHeap() / 1024f / 1024f / 200f, () -> Core.app.getJavaHeap() > 1024*1024*110),
+            new Bar("g_vtype", graphics.getGLVersion().type == GlType.GLES ? 0.5f : 1f, graphics.getGLVersion().type == GlType.GLES),
+            new Bar("s_mem#", () -> true, () -> Core.app.getJavaHeap() / 1024f / 1024f / 200f, () -> Core.app.getJavaHeap() > 1024 * 1024 * 110),
             new Bar("v_ver#", () -> Version.build != 0, () -> Version.build == -1 ? 0.3f : (Version.build - 103f) / 10f, () -> !Version.modifier.equals("release")),
             new Bar("s_osv", OS.isWindows ? 0.35f : OS.isLinux ? 0.9f : OS.isMac ? 0.5f : 0.2f, OS.isMac),
             new Bar("v_worlds#", () -> Vars.control != null && Vars.control.saves != null, () -> Vars.control.saves.getSaveSlots().size / 30f, () -> Vars.control.saves.getSaveSlots().size > 30),
@@ -98,7 +105,6 @@ public class LoadRenderer implements Disposable{
 
         float w = Core.graphics.getWidth(), h = Core.graphics.getHeight(), s = Scl.scl();
         //s = 2f;
-        Lines.precise(true);
 
         Draw.proj().setOrtho(0, 0, Core.graphics.getWidth(), Core.graphics.getHeight());
 
@@ -172,7 +178,7 @@ public class LoadRenderer implements Disposable{
         Lines.poly(w/2, h/2, 4, rad2);
 
         if(assets.isLoaded("tech")){
-            BitmapFont font = assets.get("tech");
+            Font font = assets.get("tech");
             font.getData().markupEnabled = true;
 
             int panei = 0;
@@ -305,7 +311,7 @@ public class LoadRenderer implements Disposable{
                         float vsize = vcont - vpad*2;
                         int rx = (int)(vx + vw/2f - vsize/2f), ry = (int)(vy + vh/2f - vsize/2f), rw = (int)vsize, rh = (int)vsize;
 
-                        float vrad = vsize/2f + vpad / 1f;
+                        float vrad = vsize/2f + vpad;
 
                         //planet + bars
                         if(!graphics.isPortrait()){
@@ -461,13 +467,12 @@ public class LoadRenderer implements Disposable{
             String key = name.contains("script") ? "scripts" : name.contains("content") ? "content" : name.contains("mod") ? "mods" : name.contains("msav") ||
             name.contains("maps") ? "map" : name.contains("ogg") || name.contains("mp3") ? "sound" : name.contains("png") ? "image" : "system";
 
-            BitmapFont font = assets.get("tech");
+            Font font = assets.get("tech");
             font.setColor(Pal.accent);
             Draw.color(Color.black);
-            font.draw(red + "[[[[ " +key + " ]]\n\n"+orange+"<" + Version.modifier + " " + (Version.build == 0 ? " [init]" : Version.build == -1 ? " custom" : " " + Version.build) + ">", w/2f, h/2f + 110*s, Align.center);
+            font.draw(red + "[[[[ " + key + " ]]\n" + orange + "<" + Version.modifier + "  " + (Version.build == 0 ? "[init]" : Version.buildString()) + ">", w/2f, h/2f + 110*s, Align.center);
         }
 
-        Lines.precise(false);
         Draw.flush();
 
         fx.end();

@@ -2,16 +2,17 @@ package mindustry.entities.comp;
 
 import arc.func.*;
 import arc.math.*;
-import arc.math.geom.QuadTree.*;
 import arc.math.geom.*;
+import arc.math.geom.QuadTree.*;
 import mindustry.annotations.Annotations.*;
+import mindustry.entities.*;
 import mindustry.gen.*;
 
 @Component
-abstract class HitboxComp implements Posc, QuadTreeObject{
+abstract class HitboxComp implements Posc, Sized, QuadTreeObject{
     @Import float x, y;
 
-    transient float lastX, lastY, hitSize;
+    transient float lastX, lastY, deltaX, deltaY, hitSize;
 
     @Override
     public void update(){
@@ -28,11 +29,18 @@ abstract class HitboxComp implements Posc, QuadTreeObject{
         updateLastPosition();
     }
 
+    @Override
+    public float hitSize(){
+        return hitSize;
+    }
+
     void getCollisions(Cons<QuadTree> consumer){
 
     }
 
     void updateLastPosition(){
+        deltaX = x - lastX;
+        deltaY = y - lastY;
         lastX = x;
         lastY = y;
     }
@@ -41,20 +49,12 @@ abstract class HitboxComp implements Posc, QuadTreeObject{
 
     }
 
-    float deltaX(){
-        return x - lastX;
-    }
-
-    float deltaY(){
-        return y - lastY;
-    }
-
     float deltaLen(){
-        return Mathf.len(deltaX(), deltaY());
+        return Mathf.len(deltaX, deltaY);
     }
 
     float deltaAngle(){
-        return Mathf.angle(deltaX(), deltaY());
+        return Mathf.angle(deltaX, deltaY);
     }
 
     boolean collides(Hitboxc other){
@@ -67,7 +67,8 @@ abstract class HitboxComp implements Posc, QuadTreeObject{
     }
 
     public void hitboxTile(Rect rect){
-        float scale = 0.66f;
-        rect.setCentered(x, y, hitSize * scale, hitSize * scale);
+        //tile hitboxes are never bigger than a tile, otherwise units get stuck
+        float size = Math.min(hitSize * 0.66f, 7.9f);
+        rect.setCentered(x, y, size, size);
     }
 }

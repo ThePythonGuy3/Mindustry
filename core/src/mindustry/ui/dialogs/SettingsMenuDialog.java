@@ -8,14 +8,16 @@ import arc.input.*;
 import arc.scene.*;
 import arc.scene.event.*;
 import arc.scene.ui.*;
-import arc.scene.ui.SettingsDialog.SettingsTable.*;
 import arc.scene.ui.TextButton.*;
 import arc.scene.ui.layout.*;
 import arc.struct.*;
 import arc.util.*;
 import arc.util.io.*;
+import mindustry.content.*;
+import mindustry.content.TechTree.*;
 import mindustry.core.GameState.*;
 import mindustry.core.*;
+import mindustry.ctype.*;
 import mindustry.game.EventType.*;
 import mindustry.gen.*;
 import mindustry.graphics.*;
@@ -30,9 +32,9 @@ import static mindustry.Vars.net;
 import static mindustry.Vars.*;
 
 public class SettingsMenuDialog extends SettingsDialog{
-    private SettingsTable graphics;
-    private SettingsTable game;
-    private SettingsTable sound;
+    public SettingsTable graphics;
+    public SettingsTable game;
+    public SettingsTable sound;
 
     private Table prefs;
     private Table menu;
@@ -82,18 +84,18 @@ public class SettingsMenuDialog extends SettingsDialog{
         prefs.clearChildren();
         prefs.add(menu);
 
-        dataDialog = new BaseDialog("$settings.data");
+        dataDialog = new BaseDialog("@settings.data");
         dataDialog.addCloseButton();
 
         dataDialog.cont.table(Tex.button, t -> {
-            t.defaults().size(270f, 60f).left();
+            t.defaults().size(280f, 60f).left();
             TextButtonStyle style = Styles.cleart;
 
-            t.button("$settings.cleardata", Icon.trash, style, () -> ui.showConfirm("$confirm", "$settings.clearall.confirm", () -> {
+            t.button("@settings.cleardata", Icon.trash, style, () -> ui.showConfirm("@confirm", "@settings.clearall.confirm", () -> {
                 ObjectMap<String, Object> map = new ObjectMap<>();
                 for(String value : Core.settings.keys()){
                     if(value.contains("usid") || value.contains("uuid")){
-                        map.put(value, Core.settings.getString(value));
+                        map.put(value, Core.settings.get(value, null));
                     }
                 }
                 Core.settings.clear();
@@ -104,11 +106,58 @@ public class SettingsMenuDialog extends SettingsDialog{
                 }
 
                 Core.app.exit();
-            }));
+            })).marginLeft(4);
 
             t.row();
 
-            t.button("$data.export", Icon.upload, style, () -> {
+            t.button("@settings.clearsaves", Icon.trash, style, () -> {
+                ui.showConfirm("@confirm", "@settings.clearsaves.confirm", () -> {
+                    control.saves.deleteAll();
+                });
+            }).marginLeft(4);
+
+            t.row();
+
+            t.button("@settings.clearresearch", Icon.trash, style, () -> {
+                ui.showConfirm("@confirm", "@settings.clearresearch.confirm", () -> {
+                    universe.clearLoadoutInfo();
+                    for(TechNode node : TechTree.all){
+                        node.reset();
+                    }
+                    content.each(c -> {
+                        if(c instanceof UnlockableContent u){
+                            u.clearUnlock();
+                        }
+                    });
+                    settings.remove("unlocks");
+                });
+            }).marginLeft(4);
+
+            t.row();
+
+            t.button("@settings.clearcampaignsaves", Icon.trash, style, () -> {
+                ui.showConfirm("@confirm", "@settings.clearcampaignsaves.confirm", () -> {
+                    for(var planet : content.planets()){
+                        for(var sec : planet.sectors){
+                            sec.clearInfo();
+                            if(sec.save != null){
+                                sec.save.delete();
+                                sec.save = null;
+                            }
+                        }
+                    }
+
+                    for(var slot : control.saves.getSaveSlots().copy()){
+                        if(slot.isSector()){
+                            slot.delete();
+                        }
+                    }
+                });
+            }).marginLeft(4);
+
+            t.row();
+
+            t.button("@data.export", Icon.upload, style, () -> {
                 if(ios){
                     Fi file = Core.files.local("mindustry-data-export.zip");
                     try{
@@ -121,37 +170,56 @@ public class SettingsMenuDialog extends SettingsDialog{
                     platform.showFileChooser(false, "zip", file -> {
                         try{
                             exportData(file);
-                            ui.showInfo("$data.exported");
+                            ui.showInfo("@data.exported");
                         }catch(Exception e){
                             e.printStackTrace();
                             ui.showException(e);
                         }
                     });
                 }
-            });
+            }).marginLeft(4);
 
             t.row();
 
-            t.button("$data.import", Icon.download, style, () -> ui.showConfirm("$confirm", "$data.import.confirm", () -> platform.showFileChooser(true, "zip", file -> {
+            t.button("@data.import", Icon.download, style, () -> ui.showConfirm("@confirm", "@data.import.confirm", () -> platform.showFileChooser(true, "zip", file -> {
                 try{
                     importData(file);
                     Core.app.exit();
                 }catch(IllegalArgumentException e){
-                    ui.showErrorMessage("$data.invalid");
+                    ui.showErrorMessage("@data.invalid");
                 }catch(Exception e){
                     e.printStackTrace();
                     if(e.getMessage() == null || !e.getMessage().contains("too short")){
                         ui.showException(e);
                     }else{
-                        ui.showErrorMessage("$data.invalid");
+                        ui.showErrorMessage("@data.invalid");
                     }
                 }
-            })));
+            }))).marginLeft(4);
 
             if(!mobile){
                 t.row();
-                t.button("$data.openfolder", Icon.folder, style, () -> Core.app.openFolder(Core.settings.getDataDirectory().absolutePath()));
+                t.button("@data.openfolder", Icon.folder, style, () -> Core.app.openFolder(Core.settings.getDataDirectory().absolutePath())).marginLeft(4);
             }
+
+            t.row();
+
+            t.button("@crash.export", Icon.upload, style, () -> {
+                if(settings.getDataDirectory().child("crashes").list().length == 0 && !settings.getDataDirectory().child("last_log.txt").exists()){
+                    ui.showInfo("@crash.none");
+                }else{
+                    if(ios){
+                        Fi logs = tmpDirectory.child("logs.txt");
+                        logs.writeString(getLogs());
+                        platform.shareFile(logs);
+                    }else{
+                        platform.showFileChooser(false, "txt", file -> {
+                            file.writeString(getLogs());
+                            app.post(() -> ui.showInfo("@crash.exported"));
+                        });
+                    }
+                }
+            }).marginLeft(4);
         });
 
         ScrollPane pane = new ScrollPane(prefs);
@@ -183,26 +251,41 @@ public class SettingsMenuDialog extends SettingsDialog{
         addSettings();
     }
 
+    String getLogs(){
+        Fi log = settings.getDataDirectory().child("last_log.txt");
+
+        StringBuilder out = new StringBuilder();
+        for(Fi fi : settings.getDataDirectory().child("crashes").list()){
+            out.append(fi.name()).append("\n\n").append(fi.readString()).append("\n");
+        }
+
+        if(log.exists()){
+            out.append("\nlast log:\n").append(log.readString());
+        }
+
+        return out.toString();
+    }
+
     void rebuildMenu(){
         menu.clearChildren();
 
         TextButtonStyle style = Styles.cleart;
 
         menu.defaults().size(300f, 60f);
-        menu.button("$settings.game", style, () -> visible(0));
+        menu.button("@settings.game", style, () -> visible(0));
         menu.row();
-        menu.button("$settings.graphics", style, () -> visible(1));
+        menu.button("@settings.graphics", style, () -> visible(1));
         menu.row();
-        menu.button("$settings.sound", style, () -> visible(2));
+        menu.button("@settings.sound", style, () -> visible(2));
         menu.row();
-        menu.button("$settings.language", style, ui.language::show);
+        menu.button("@settings.language", style, ui.language::show);
         if(!mobile || Core.settings.getBool("keyboard")){
             menu.row();
-            menu.button("$settings.controls", style, ui.controls::show);
+            menu.button("@settings.controls", style, ui.controls::show);
         }
 
         menu.row();
-        menu.button("$settings.data", style, () -> dataDialog.show());
+        menu.button("@settings.data", style, () -> dataDialog.show());
     }
 
     void addSettings(){
@@ -230,8 +313,6 @@ public class SettingsMenuDialog extends SettingsDialog{
         game.sliderPref("saveinterval", 60, 10, 5 * 120, 10, i -> Core.bundle.format("setting.seconds", i));
 
         if(!mobile){
-            game.sliderPref("blockselecttimeout", 750, 0, 2000, 50, i -> Core.bundle.format("setting.milliseconds", i));
-
             game.checkPref("crashreport", true);
         }
 
@@ -239,10 +320,18 @@ public class SettingsMenuDialog extends SettingsDialog{
         game.checkPref("blockreplace", true);
         game.checkPref("conveyorpathfinding", true);
         game.checkPref("hints", true);
+        game.checkPref("logichints", true);
+
         if(!mobile){
+            game.checkPref("backgroundpause", true);
             game.checkPref("buildautopause", false);
         }
-        game.checkPref("mapcenter", true);
+
+        game.checkPref("doubletapmine", false);
+      
+        if(!ios){
+            game.checkPref("modcrashdisable", true);
+        }
 
         if(steam){
             game.sliderPref("playerlimit", 16, 2, 32, i -> {
@@ -256,19 +345,6 @@ public class SettingsMenuDialog extends SettingsDialog{
                 });
             }
         }
-
-        game.pref(new Setting(){
-            @Override
-            public void add(SettingsTable table){
-                table.button("$tutorial.retake", () -> {
-                    hide();
-                    control.playTutorial();
-                }).size(220f, 60f).pad(6).left();
-                table.add();
-                table.row();
-                hide();
-            }
-        });
 
         graphics.sliderPref("uiscale", 100, 25, 300, 25, s -> {
             if(ui.settings != null){
@@ -284,7 +360,7 @@ public class SettingsMenuDialog extends SettingsDialog{
             }
             return s + "%";
         });
-        graphics.sliderPref("bridgeopacity", 75, 0, 100, 5, s -> s + "%");
+        graphics.sliderPref("bridgeopacity", 100, 0, 100, 5, s -> s + "%");
 
         if(!mobile){
             graphics.checkPref("vsync", true, b -> Core.graphics.setVSync(b));
@@ -326,28 +402,25 @@ public class SettingsMenuDialog extends SettingsDialog{
         graphics.checkPref("blockstatus", false);
         graphics.checkPref("playerchat", true);
         if(!mobile){
-            graphics.checkPref("coreitems", false);
+            graphics.checkPref("coreitems", true);
         }
         graphics.checkPref("minimap", !mobile);
         graphics.checkPref("smoothcamera", true);
         graphics.checkPref("position", false);
         graphics.checkPref("fps", false);
-        if(!mobile){
-            graphics.checkPref("blockselectkeys", true);
-        }
         graphics.checkPref("playerindicators", true);
         graphics.checkPref("indicators", true);
+        graphics.checkPref("showweather", true);
         graphics.checkPref("animatedwater", true);
         if(Shaders.shield != null){
             graphics.checkPref("animatedshields", !mobile);
         }
-        if(!ios){
+
+        //if(!ios){
             graphics.checkPref("bloom", true, val -> renderer.toggleBloom(val));
-        }else{
-            Core.settings.put("bloom", false);
-        }
-
-
+        //}else{
+        //    Core.settings.put("bloom", false);
+        //}
 
         graphics.checkPref("pixelate", false, val -> {
             if(val){
@@ -355,7 +428,7 @@ public class SettingsMenuDialog extends SettingsDialog{
             }
         });
 
-        graphics.checkPref("linear", true, b -> {
+        graphics.checkPref("linear", !mobile, b -> {
             for(Texture tex : Core.atlas.getTextures()){
                 TextureFilter filter = b ? TextureFilter.linear : TextureFilter.nearest;
                 tex.setFilter(filter, filter);
@@ -386,11 +459,24 @@ public class SettingsMenuDialog extends SettingsDialog{
         files.addAll(schematicDirectory.list());
         String base = Core.settings.getDataDirectory().path();
 
+        //add directories
+        for(Fi other : files.copy()){
+            Fi parent = other.parent();
+            while(!files.contains(parent) && !parent.equals(settings.getDataDirectory())){
+                files.add(parent);
+            }
+        }
+
         try(OutputStream fos = file.write(false, 2048); ZipOutputStream zos = new ZipOutputStream(fos)){
             for(Fi add : files){
-                if(add.isDirectory()) continue;
-                zos.putNextEntry(new ZipEntry(add.path().substring(base.length())));
-                Streams.copy(add.read(), zos);
+                String path = add.path().substring(base.length());
+                if(add.isDirectory()) path += "/";
+                //fix trailing / in path
+                path = path.startsWith("/") ? path.substring(1) : path;
+                zos.putNextEntry(new ZipEntry(path));
+                if(!add.isDirectory()){
+                    Streams.copy(add.read(), zos);
+                }
                 zos.closeEntry();
             }
         }
@@ -406,11 +492,19 @@ public class SettingsMenuDialog extends SettingsDialog{
             throw new IllegalArgumentException("Not valid save data.");
         }
 
+        //delete old saves so they don't interfere
+        saveDirectory.deleteDirectory();
+
         //purge existing tmp data, keep everything else
         tmpDirectory.deleteDirectory();
 
         zipped.walk(f -> f.copyTo(base.child(f.path())));
         dest.delete();
+
+        //clear old data
+        settings.clear();
+        //load data so it's saved on exit
+        settings.load();
     }
 
     private void back(){
@@ -426,13 +520,13 @@ public class SettingsMenuDialog extends SettingsDialog{
 
     @Override
     public void addCloseButton(){
-        buttons.button("$back", Icon.leftOpen, () -> {
+        buttons.button("@back", Icon.left, () -> {
             if(prefs.getChildren().first() != menu){
                 back();
             }else{
                 hide();
             }
-        }).size(230f, 64f);
+        }).size(210f, 64f);
 
         keyDown(key -> {
             if(key == KeyCode.escape || key == KeyCode.back){

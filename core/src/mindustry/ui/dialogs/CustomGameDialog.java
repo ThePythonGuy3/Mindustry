@@ -17,7 +17,7 @@ public class CustomGameDialog extends BaseDialog{
     private MapPlayDialog dialog = new MapPlayDialog();
 
     public CustomGameDialog(){
-        super("$customgame");
+        super("@customgame");
         addCloseButton();
         shown(this::setup);
         onResize(this::setup);
@@ -25,8 +25,7 @@ public class CustomGameDialog extends BaseDialog{
 
     void setup(){
         clearChildren();
-        add(titleTable);
-        row();
+        add(titleTable).growX().row();
         stack(cont, buttons).grow();
         buttons.bottom();
         cont.clear();
@@ -84,7 +83,7 @@ public class CustomGameDialog extends BaseDialog{
         }
 
         if(Vars.maps.all().size == 0){
-            maps.add("$maps.none").pad(50);
+            maps.add("@maps.none").pad(50);
         }
 
         cont.add(pane).uniformX();

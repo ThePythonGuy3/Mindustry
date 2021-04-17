@@ -1,7 +1,6 @@
 package mindustry.entities.comp;
 
 import arc.graphics.*;
-import arc.math.*;
 import arc.struct.*;
 import arc.util.*;
 import arc.util.pooling.*;
@@ -20,12 +19,10 @@ abstract class StatusComp implements Posc, Flyingc{
     private Seq<StatusEntry> statuses = new Seq<>();
     private transient Bits applied = new Bits(content.getBy(ContentType.status).size);
 
-    @ReadOnly transient float speedMultiplier = 1, damageMultiplier = 1, armorMultiplier = 1, reloadMultiplier = 1;
+    @ReadOnly transient float speedMultiplier = 1, damageMultiplier = 1, healthMultiplier = 1, reloadMultiplier = 1, buildSpeedMultiplier = 1, dragMultiplier = 1;
+    @ReadOnly transient boolean disarmed = false;
 
-    /** @return damage taken based on status armor multipliers */
-    float getShieldDamage(float amount){
-        return amount * Mathf.clamp(1f - armorMultiplier / 100f);
-    }
+    @Import UnitType type;
 
     /** Apply a status effect for 1 tick (for permanent effects) **/
     void apply(StatusEffect effect){
@@ -35,6 +32,11 @@ abstract class StatusComp implements Posc, Flyingc{
     /** Adds a status effect to this unit. */
     void apply(StatusEffect effect, float duration){
         if(effect == StatusEffects.none || effect == null || isImmune(effect)) return; //don't apply empty or immune effects
+
+        //unlock status effects regardless of whether they were applied to friendly units
+        if(state.isCampaign()){
+            effect.unlock();
+        }
 
         if(statuses.size > 0){
             //check for opposite effects
@@ -46,7 +48,7 @@ abstract class StatusComp implements Posc, Flyingc{
                     return;
                 }else if(entry.effect.reactsWith(effect)){ //find opposite
                     StatusEntry.tmp.effect = entry.effect;
-                    entry.effect.getTransition(base(), effect, entry.time, duration, StatusEntry.tmp);
+                    entry.effect.getTransition(self(), effect, entry.time, duration, StatusEntry.tmp);
                     entry.time = StatusEntry.tmp.time;
 
                     if(StatusEntry.tmp.effect != entry.effect){
@@ -59,10 +61,16 @@ abstract class StatusComp implements Posc, Flyingc{
             }
         }
 
-        //otherwise, no opposites found, add direct effect
-        StatusEntry entry = Pools.obtain(StatusEntry.class, StatusEntry::new);
-        entry.set(effect, duration);
-        statuses.add(entry);
+        if(!effect.reactive){
+            //otherwise, no opposites found, add direct effect
+            StatusEntry entry = Pools.obtain(StatusEntry.class, StatusEntry::new);
+            entry.set(effect, duration);
+            statuses.add(entry);
+        }
+    }
+
+    void clearStatuses(){
+        statuses.clear();
     }
 
     /** Removes a status effect. */
@@ -102,13 +110,14 @@ abstract class StatusComp implements Posc, Flyingc{
     @Override
     public void update(){
         Floor floor = floorOn();
-        if(isGrounded()){
+        if(isGrounded() && !type.hovering){
             //apply effect
             apply(floor.status, floor.statusDuration);
         }
 
         applied.clear();
-        speedMultiplier = damageMultiplier = armorMultiplier = reloadMultiplier = 1f;
+        speedMultiplier = damageMultiplier = healthMultiplier = reloadMultiplier = buildSpeedMultiplier = dragMultiplier = 1f;
+        disarmed = false;
 
         if(statuses.isEmpty()) return;
 
@@ -118,25 +127,31 @@ abstract class StatusComp implements Posc, Flyingc{
             StatusEntry entry = statuses.get(index++);
 
             entry.time = Math.max(entry.time - Time.delta, 0);
-            applied.set(entry.effect.id);
 
-            if(entry.time <= 0 && !entry.effect.permanent){
+            if(entry.effect == null || (entry.time <= 0 && !entry.effect.permanent)){
                 Pools.free(entry);
                 index --;
                 statuses.remove(index);
             }else{
+                applied.set(entry.effect.id);
+
                 speedMultiplier *= entry.effect.speedMultiplier;
-                armorMultiplier *= entry.effect.armorMultiplier;
+                healthMultiplier *= entry.effect.healthMultiplier;
                 damageMultiplier *= entry.effect.damageMultiplier;
                 reloadMultiplier *= entry.effect.reloadMultiplier;
-                entry.effect.update(base(), entry.time);
+                buildSpeedMultiplier *= entry.effect.buildSpeedMultiplier;
+                dragMultiplier *= entry.effect.dragMultiplier;
+
+                disarmed |= entry.effect.disarm;
+
+                entry.effect.update(self(), entry.time);
             }
         }
     }
 
     public void draw(){
         for(StatusEntry e : statuses){
-            e.effect.draw(base());
+            e.effect.draw(self());
         }
     }
 

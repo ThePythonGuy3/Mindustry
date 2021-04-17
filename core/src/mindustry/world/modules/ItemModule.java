@@ -2,14 +2,13 @@ package mindustry.world.modules;
 
 import arc.math.*;
 import arc.struct.*;
-import arc.util.ArcAnnotate.*;
 import arc.util.*;
 import arc.util.io.*;
 import mindustry.type.*;
 
 import java.util.*;
 
-import static mindustry.Vars.content;
+import static mindustry.Vars.*;
 
 public class ItemModule extends BlockModule{
     public static final ItemModule empty = new ItemModule();
@@ -104,7 +103,7 @@ public class ItemModule extends BlockModule{
 
     public void each(ItemConsumer cons){
         for(int i = 0; i < items.length; i++){
-            if(items[i] > 0){
+            if(items[i] != 0){
                 cons.accept(content.item(i), items[i]);
             }
         }
@@ -131,6 +130,15 @@ public class ItemModule extends BlockModule{
     public boolean has(ItemStack[] stacks){
         for(ItemStack stack : stacks){
             if(!has(stack.item, stack.amount)) return false;
+        }
+        return true;
+    }
+
+    public boolean has(ItemSeq items){
+        for(Item item : content.items()){
+            if(!has(item, items.get(item))){
+                return false;
+            }
         }
         return true;
     }
@@ -171,6 +179,7 @@ public class ItemModule extends BlockModule{
         return total > 0;
     }
 
+    @Nullable
     public Item first(){
         for(int i = 0; i < items.length; i++){
             if(items[i] > 0){
@@ -180,6 +189,7 @@ public class ItemModule extends BlockModule{
         return null;
     }
 
+    @Nullable
     public Item take(){
         for(int i = 0; i < items.length; i++){
             int index = (i + takeRotation);
@@ -195,7 +205,8 @@ public class ItemModule extends BlockModule{
     }
 
     /** Begins a speculative take operation. This returns the item that would be returned by #take(), but does not change state. */
-    public Item beginTake(){
+    @Nullable
+    public Item takeIndex(int takeRotation){
         for(int i = 0; i < items.length; i++){
             int index = (i + takeRotation);
             if(index >= items.length) index -= items.length;
@@ -206,11 +217,15 @@ public class ItemModule extends BlockModule{
         return null;
     }
 
-    /** Finishes a take operation. Updates take state, removes the item. */
-    public void endTake(Item item){
-        items[item.id] --;
-        total --;
-        takeRotation = item.id + 1;
+    public int nextIndex(int takeRotation){
+        for(int i = 1; i < items.length; i++){
+            int index = (i + takeRotation);
+            if(index >= items.length) index -= items.length;
+            if(items[index] > 0){
+                return (takeRotation + i) % items.length;
+            }
+        }
+        return takeRotation;
     }
 
     public int get(int id){
@@ -232,6 +247,16 @@ public class ItemModule extends BlockModule{
         }
     }
 
+    public void add(ItemSeq stacks){
+        stacks.each(this::add);
+    }
+
+    public void add(ItemModule items){
+        for(int i = 0; i < items.items.length; i++){
+            add(i, items.items[i]);
+        }
+    }
+
     public void add(Item item, int amount){
         add(item.id, amount);
     }
@@ -244,9 +269,9 @@ public class ItemModule extends BlockModule{
         }
     }
 
-    public void addAll(ItemModule items){
-        for(int i = 0; i < items.items.length; i++){
-            add(i, items.items[i]);
+    public void undoFlow(Item item){
+        if(flow != null){
+            cacheSums[item.id] -= 1;
         }
     }
 
@@ -259,6 +284,10 @@ public class ItemModule extends BlockModule{
 
     public void remove(ItemStack[] stacks){
         for(ItemStack stack : stacks) remove(stack.item, stack.amount);
+    }
+
+    public void remove(ItemSeq stacks){
+        stacks.each(this::remove);
     }
 
     public void remove(Iterable<ItemStack> stacks){
@@ -276,30 +305,30 @@ public class ItemModule extends BlockModule{
 
     @Override
     public void write(Writes write){
-        byte amount = 0;
+        int amount = 0;
         for(int item : items){
             if(item > 0) amount++;
         }
 
-        write.b(amount); //amount of items
+        write.s(amount); //amount of items
 
         for(int i = 0; i < items.length; i++){
             if(items[i] > 0){
-                write.b(i); //item ID
+                write.s(i); //item ID
                 write.i(items[i]); //item amount
             }
         }
     }
 
     @Override
-    public void read(Reads read){
+    public void read(Reads read, boolean legacy){
         //just in case, reset items
         Arrays.fill(items, 0);
-        byte count = read.b();
+        int count = legacy ? read.ub() : read.s();
         total = 0;
 
         for(int j = 0; j < count; j++){
-            int itemid = read.b();
+            int itemid = legacy ? read.ub() : read.s();
             int itemamount = read.i();
             items[content.item(itemid).id] = itemamount;
             total += itemamount;

@@ -14,12 +14,12 @@ public class Puddles{
 
     public static final float maxLiquid = 70f;
 
-    /** Deposists a Puddle between tile and source. */
+    /** Deposits a Puddle between tile and source. */
     public static void deposit(Tile tile, Tile source, Liquid liquid, float amount){
         deposit(tile, source, liquid, amount, 0);
     }
 
-    /** Deposists a Puddle at a tile. */
+    /** Deposits a Puddle at a tile. */
     public static void deposit(Tile tile, Liquid liquid, float amount){
         deposit(tile, tile, liquid, amount, 0);
     }
@@ -38,10 +38,14 @@ public class Puddles{
 
             Puddle p = map.get(tile.pos());
 
-            if(generation == 0 && p != null && p.lastRipple() <= Time.time() - 40f){
+            if(generation == 0 && p != null && p.lastRipple <= Time.time - 40f){
                 Fx.ripple.at((tile.worldx() + source.worldx()) / 2f, (tile.worldy() + source.worldy()) / 2f, 1f, tile.floor().liquidDrop.color);
-                p.lastRipple(Time.time());
+                p.lastRipple = Time.time;
             }
+            return;
+        }
+
+        if(tile.floor().solid){
             return;
         }
 
@@ -58,9 +62,9 @@ public class Puddles{
         }else if(p.liquid() == liquid){
             p.accepting(Math.max(amount, p.accepting()));
 
-            if(generation == 0 && p.lastRipple() <= Time.time() - 40f && p.amount() >= maxLiquid / 2f){
+            if(generation == 0 && p.lastRipple <= Time.time - 40f && p.amount() >= maxLiquid / 2f){
                 Fx.ripple.at((tile.worldx() + source.worldx()) / 2f, (tile.worldy() + source.worldy()) / 2f, 1f, p.liquid().color);
-                p.lastRipple(Time.time());
+                p.lastRipple = Time.time;
             }
         }else{
             p.amount(p.amount() + reactPuddle(p.liquid(), liquid, amount, p.tile(), (p.x() + source.worldx())/2f, (p.y() + source.worldy())/2f));
@@ -83,7 +87,7 @@ public class Puddles{
         (liquid.flammability > 0.3f && dest.temperature > 0.7f)){ //flammable liquid + hot liquid
             Fires.create(tile);
             if(Mathf.chance(0.006 * amount)){
-                Call.createBullet(Bullets.fireball, Team.derelict, x, y, Mathf.random(360f), -1f, 1f, 1f);
+                Bullets.fireball.createNet(Team.derelict, x, y, Mathf.random(360f), -1f, 1f, 1f);
             }
         }else if(dest.temperature > 0.7f && liquid.temperature < 0.55f){ //cold liquid poured onto hot Puddle
             if(Mathf.chance(0.5f * amount)){

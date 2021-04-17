@@ -14,9 +14,16 @@ import mindustry.type.*;
 import mindustry.ui.dialogs.*;
 import rhino.*;
 
+import java.net.*;
+
 import static mindustry.Vars.*;
 
 public interface Platform{
+
+    /** Dynamically creates a class loader for a jar file. */
+    default ClassLoader loadJar(Fi jar, String mainClass) throws Exception{
+        return new URLClassLoader(new URL[]{jar.file().toURI().toURL()}, getClass().getClassLoader());
+    }
 
     /** Steam: Update lobby visibility.*/
     default void updateLobby(){}
@@ -109,9 +116,10 @@ public interface Platform{
      * @param cons Selection listener
      * @param open Whether to open or save files
      * @param extension File extension to filter
+     * @param title The title of the native dialog
      */
-    default void showFileChooser(boolean open, String extension, Cons<Fi> cons){
-        new FileChooser(open ? "$open" : "$save", file -> file.extEquals(extension), open, file -> {
+    default void showFileChooser(boolean open, String title, String extension, Cons<Fi> cons){
+        new FileChooser(title, file -> file.extEquals(extension), open, file -> {
             if(!open){
                 cons.get(file.parent().child(file.nameWithoutExtension() + "." + extension));
             }else{
@@ -120,8 +128,12 @@ public interface Platform{
         }).show();
     }
 
+    default void showFileChooser(boolean open, String extension, Cons<Fi> cons){
+        showFileChooser(open, open ? "@open": "@save", extension, cons);
+    }
+
     /**
-     * Show a file chooser for multiple file types. Only supported on desktop.
+     * Show a file chooser for multiple file types.
      * @param cons Selection listener
      * @param extensions File extensions to filter
      */
@@ -129,7 +141,7 @@ public interface Platform{
         if(mobile){
             showFileChooser(true, extensions[0], cons);
         }else{
-            new FileChooser("$open", file -> Structs.contains(extensions, file.extension().toLowerCase()), true, cons).show();
+            new FileChooser("@open", file -> Structs.contains(extensions, file.extension().toLowerCase()), true, cons).show();
         }
     }
 

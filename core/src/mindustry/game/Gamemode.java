@@ -23,7 +23,6 @@ public enum Gamemode{
         rules.waveTimer = true;
 
         rules.waveSpacing /= 2f;
-        rules.teams.get(rules.waveTeam).ai = true;
         rules.teams.get(rules.waveTeam).infiniteResources = true;
     }, map -> map.teams.contains(state.rules.waveTeam.id)),
     pvp(rules -> {
@@ -32,7 +31,6 @@ public enum Gamemode{
         rules.buildCostMultiplier = 1f;
         rules.buildSpeedMultiplier = 1f;
         rules.unitBuildSpeedMultiplier = 2f;
-        rules.unitHealthMultiplier = 3f;
         rules.attackMode = true;
     }, map -> map.teams.size > 1),
     editor(true, rules -> {

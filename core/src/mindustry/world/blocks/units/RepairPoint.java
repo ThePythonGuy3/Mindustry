@@ -6,17 +6,19 @@ import arc.math.*;
 import arc.math.geom.*;
 import arc.struct.*;
 import arc.util.*;
+import arc.util.io.*;
 import mindustry.annotations.Annotations.*;
 import mindustry.entities.*;
 import mindustry.gen.*;
 import mindustry.graphics.*;
+import mindustry.logic.*;
 import mindustry.world.*;
 import mindustry.world.meta.*;
 
 import static mindustry.Vars.*;
 
 public class RepairPoint extends Block{
-    private static final Rect rect = new Rect();
+    static final Rect rect = new Rect();
 
     public int timerTarget = timers++;
 
@@ -37,22 +39,25 @@ public class RepairPoint extends Block{
         flags = EnumSet.of(BlockFlag.repair);
         hasPower = true;
         outlineIcon = true;
+        expanded = true;
     }
 
     @Override
     public void setStats(){
         super.setStats();
-        stats.add(BlockStat.range, repairRadius / tilesize, StatUnit.blocks);
+        stats.add(Stat.range, repairRadius / tilesize, StatUnit.blocks);
     }
 
     @Override
     public void init(){
-        consumes.powerCond(powerUse, entity -> ((RepairPointEntity)entity).target != null);
+        consumes.powerCond(powerUse, entity -> ((RepairPointBuild)entity).target != null);
         super.init();
     }
 
     @Override
     public void drawPlace(int x, int y, int rotation, boolean valid){
+        super.drawPlace(x, y, rotation, valid);
+
         Drawf.dashCircle(x * tilesize + offset, y * tilesize + offset, repairRadius, Pal.accent);
     }
 
@@ -61,7 +66,7 @@ public class RepairPoint extends Block{
         return new TextureRegion[]{baseRegion, region};
     }
 
-    public class RepairPointEntity extends Building{
+    public class RepairPointBuild extends Building implements Ranged{
         public Unit target;
         public float strength, rotation = 90;
 
@@ -70,10 +75,11 @@ public class RepairPoint extends Block{
             Draw.rect(baseRegion, x, y);
 
             Draw.z(Layer.turret);
+            Drawf.shadow(region, x - (size / 2f), y - (size / 2f), rotation - 90);
             Draw.rect(region, x, y, rotation - 90);
 
             if(target != null && Angles.angleDist(angleTo(target), rotation) < 30f){
-                Draw.z(Layer.power);
+                Draw.z(Layer.flyingUnit + 1); //above all units
                 float ang = angleTo(target);
                 float len = 5f;
 
@@ -93,11 +99,11 @@ public class RepairPoint extends Block{
         @Override
         public void updateTile(){
             boolean targetIsBeingRepaired = false;
-            if(target != null && (target.dead() || target.dst(tile) > repairRadius || target.health() >= target.maxHealth())){
+            if(target != null && (target.dead() || target.dst(tile) - target.hitSize/2f > repairRadius || target.health() >= target.maxHealth())){
                 target = null;
             }else if(target != null && consValid()){
-                target.heal(repairSpeed * Time.delta * strength * efficiency());
-                rotation = Mathf.slerpDelta(rotation, angleTo(target), 0.5f);
+                target.heal(repairSpeed * strength * edelta());
+                rotation = Mathf.slerpDelta(rotation, angleTo(target), 0.5f * efficiency() * timeScale);
                 targetIsBeingRepaired = true;
             }
 
@@ -115,7 +121,38 @@ public class RepairPoint extends Block{
 
         @Override
         public boolean shouldConsume(){
-            return target != null;
+            return target != null && enabled;
+        }
+
+        @Override
+        public BlockStatus status(){
+            return Mathf.equal(efficiency(), 0f, 0.01f) ? BlockStatus.noInput : cons.status();
+        }
+
+        @Override
+        public float range(){
+            return repairRadius;
+        }
+
+        @Override
+        public void write(Writes write){
+            super.write(write);
+            
+            write.f(rotation);
+        }
+
+        @Override
+        public void read(Reads read, byte revision){
+            super.read(read, revision);
+
+            if(revision >= 1){
+                rotation = read.f();
+            }
+        }
+
+        @Override
+        public byte version(){
+            return 1;
         }
     }
 }

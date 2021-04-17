@@ -1,12 +1,16 @@
 package mindustry.world.blocks.units;
 
+import arc.*;
 import arc.graphics.g2d.*;
 import arc.math.*;
+import arc.struct.*;
 import arc.util.*;
+import arc.util.io.*;
 import mindustry.*;
 import mindustry.content.*;
 import mindustry.entities.*;
 import mindustry.entities.units.*;
+import mindustry.game.EventType.*;
 import mindustry.gen.*;
 import mindustry.graphics.*;
 import mindustry.type.*;
@@ -19,8 +23,8 @@ import static mindustry.Vars.*;
 
 public class Reconstructor extends UnitBlock{
     public float constructTime = 60 * 2;
-    public UnitType[][] upgrades = {};
-    public int[] capacities;
+    public Seq<UnitType[]> upgrades = new Seq<>();
+    public int[] capacities = {};
 
     public Reconstructor(String name){
         super(name);
@@ -29,26 +33,55 @@ public class Reconstructor extends UnitBlock{
     @Override
     public void drawRequestRegion(BuildPlan req, Eachable<BuildPlan> list){
         Draw.rect(region, req.drawx(), req.drawy());
+        Draw.rect(inRegion, req.drawx(), req.drawy(), req.rotation * 90);
         Draw.rect(outRegion, req.drawx(), req.drawy(), req.rotation * 90);
         Draw.rect(topRegion, req.drawx(), req.drawy());
     }
 
     @Override
     public TextureRegion[] icons(){
-        return new TextureRegion[]{region, outRegion, topRegion};
+        return new TextureRegion[]{region, inRegion, outRegion, topRegion};
     }
 
     @Override
     public void setBars(){
         super.setBars();
-        bars.add("progress", (ReconstructorEntity entity) -> new Bar("bar.progress", Pal.ammo, entity::fraction));
+
+        bars.add("progress", (ReconstructorBuild entity) -> new Bar("bar.progress", Pal.ammo, entity::fraction));
+        bars.add("units", (ReconstructorBuild e) ->
+        new Bar(
+            () -> e.unit() == null ? "[lightgray]" + Iconc.cancel :
+                Core.bundle.format("bar.unitcap",
+                Fonts.getUnicodeStr(e.unit().name),
+                e.team.data().countType(e.unit()),
+                Units.getCap(e.team)
+            ),
+            () -> Pal.power,
+            () -> e.unit() == null ? 0f : (float)e.team.data().countType(e.unit()) / Units.getCap(e.team)
+        ));
     }
 
     @Override
     public void setStats(){
         super.setStats();
 
-        stats.add(BlockStat.productionTime, constructTime / 60f, StatUnit.seconds);
+        stats.add(Stat.productionTime, constructTime / 60f, StatUnit.seconds);
+        stats.add(Stat.output, table -> {
+            table.row();
+            for(var upgrade : upgrades){
+                float size = 8 * 3;
+                if(upgrade[0].unlockedNow() && upgrade[1].unlockedNow()){
+                    table.image(upgrade[0].icon(Cicon.small)).size(size).padRight(4).padLeft(10).scaling(Scaling.fit).right();
+                    table.add(upgrade[0].localizedName).left();
+
+                    table.add("[lightgray] -> ");
+
+                    table.image(upgrade[1].icon(Cicon.small)).size(size).padRight(4).scaling(Scaling.fit);
+                    table.add(upgrade[1].localizedName).left();
+                    table.row();
+                }
+            }
+        });
     }
 
     @Override
@@ -64,7 +97,11 @@ public class Reconstructor extends UnitBlock{
         super.init();
     }
 
-    public class ReconstructorEntity extends UnitBlockEntity{
+    public void addUpgrade(UnitType from, UnitType to){
+        upgrades.add(new UnitType[]{from, to});
+    }
+
+    public class ReconstructorBuild extends UnitBuild{
 
         public float fraction(){
             return progress / constructTime;
@@ -73,9 +110,10 @@ public class Reconstructor extends UnitBlock{
         @Override
         public boolean acceptPayload(Building source, Payload payload){
             return this.payload == null
-                && relativeTo(source) != rotation()
-                && payload instanceof UnitPayload
-                && hasUpgrade(((UnitPayload)payload).unit.type());
+                && (this.enabled || source == this)
+                && relativeTo(source) != rotation
+                && payload instanceof UnitPayload pay
+                && hasUpgrade(pay.unit.type);
         }
 
         @Override
@@ -84,28 +122,37 @@ public class Reconstructor extends UnitBlock{
         }
 
         @Override
+        public void overwrote(Seq<Building> builds){
+            if(builds.first().block == block){
+                items.add(builds.first().items);
+            }
+        }
+
+        @Override
         public void draw(){
             Draw.rect(region, x, y);
 
             //draw input
+            boolean fallback = true;
             for(int i = 0; i < 4; i++){
-                if(blends(i) && i != rotation()){
-                    Draw.rect(inRegion, x, y, i * 90);
+                if(blends(i) && i != rotation){
+                    Draw.rect(inRegion, x, y, (i * 90) - 180);
+                    fallback = false;
                 }
             }
+            if(fallback) Draw.rect(inRegion, x, y, rotation * 90);
 
             Draw.rect(outRegion, x, y, rotdeg());
 
             if(constructing() && hasArrived()){
                 Draw.draw(Layer.blockOver, () -> {
                     Draw.alpha(1f - progress/ constructTime);
-                    Draw.rect(payload.unit.type().icon(Cicon.full), x, y, rotdeg() - 90);
+                    Draw.rect(payload.unit.type.icon(Cicon.full), x, y, payload.rotation() - 90);
                     Draw.reset();
-                    Drawf.construct(this, upgrade(payload.unit.type()), rotdeg() - 90f, progress / constructTime, speedScl, time);
+                    Drawf.construct(this, upgrade(payload.unit.type), payload.rotation() - 90f, progress / constructTime, speedScl, time);
                 });
             }else{
                 Draw.z(Layer.blockOver);
-                payRotation = rotdeg();
 
                 drawPayload();
             }
@@ -120,22 +167,23 @@ public class Reconstructor extends UnitBlock{
 
             if(payload != null){
                 //check if offloading
-                if(!hasUpgrade(payload.unit.type())){
+                if(!hasUpgrade(payload.unit.type)){
                     moveOutPayload();
                 }else{ //update progress
                     if(moveInPayload()){
                         if(consValid()){
                             valid = true;
-                            progress += edelta();
+                            progress += edelta() * state.rules.unitBuildSpeedMultiplier;
                         }
 
                         //upgrade the unit
                         if(progress >= constructTime){
-                            payload.unit = upgrade(payload.unit.type()).create(payload.unit.team());
-                            progress = 0;
-                            Effects.shake(2f, 3f, this);
+                            payload.unit = upgrade(payload.unit.type).create(payload.unit.team());
+                            progress %= 1f;
+                            Effect.shake(2f, 3f, this);
                             Fx.producesmoke.at(this);
                             consume();
+                            Events.fire(new UnitCreateEvent(payload.unit, this));
                         }
                     }
                 }
@@ -145,8 +193,20 @@ public class Reconstructor extends UnitBlock{
             time += edelta() * speedScl * state.rules.unitBuildSpeedMultiplier;
         }
 
+        @Override
+        public boolean shouldConsume(){
+            return constructing();
+        }
+
+        public UnitType unit(){
+            if(payload == null) return null;
+
+            UnitType t = upgrade(payload.unit.type);
+            return t != null && t.unlockedNow() ? t : null;
+        }
+
         public boolean constructing(){
-            return payload != null && hasUpgrade(payload.unit.type());
+            return payload != null && hasUpgrade(payload.unit.type);
         }
 
         public boolean hasUpgrade(UnitType type){
@@ -155,8 +215,31 @@ public class Reconstructor extends UnitBlock{
         }
 
         public UnitType upgrade(UnitType type){
-            UnitType[] r =  Structs.find(upgrades, arr -> arr[0] == type);
+            UnitType[] r =  upgrades.find(u -> u[0] == type);
             return r == null ? null : r[1];
         }
+
+        @Override
+        public byte version(){
+            return 1;
+        }
+
+        @Override
+        public void write(Writes write){
+            super.write(write);
+
+            write.f(progress);
+        }
+
+        @Override
+        public void read(Reads read, byte revision){
+            super.read(read, revision);
+
+            if(revision == 1){
+                progress = read.f();
+            }
+
+        }
+
     }
 }

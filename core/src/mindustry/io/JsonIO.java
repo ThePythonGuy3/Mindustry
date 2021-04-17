@@ -13,8 +13,9 @@ import java.io.*;
 
 @SuppressWarnings("unchecked")
 public class JsonIO{
-    private static CustomJson jsonBase = new CustomJson();
-    private static Json json = new Json(){
+    private static final CustomJson jsonBase = new CustomJson();
+
+    public static final Json json = new Json(){
         { apply(this); }
 
         @Override
@@ -38,10 +39,6 @@ public class JsonIO{
             return super.convertToString(object);
         }
     };
-
-    public static Json json(){
-        return json;
-    }
 
     public static String write(Object object){
         return json.toJson(object, object.getClass());
@@ -68,14 +65,13 @@ public class JsonIO{
         return json.prettyPrint(in);
     }
 
-    private static void apply(Json json){
-        json.setIgnoreUnknownFields(true);
+    static void apply(Json json){
         json.setElementType(Rules.class, "spawns", SpawnGroup.class);
         json.setElementType(Rules.class, "loadout", ItemStack.class);
 
         //TODO this is terrible
 
-        json.setSerializer(Sector.class, new Serializer<Sector>(){
+        json.setSerializer(Sector.class, new Serializer<>(){
             @Override
             public void write(Json json, Sector object, Class knownType){
                 json.writeValue(object.planet.name + "-" + object.id);
@@ -83,12 +79,13 @@ public class JsonIO{
 
             @Override
             public Sector read(Json json, JsonValue jsonData, Class type){
-                String[] split = jsonData.asString().split("-");
-                return Vars.content.<Planet>getByName(ContentType.planet, split[0]).sectors.get(Integer.parseInt(split[1]));
+                String name = jsonData.asString();
+                int idx = name.lastIndexOf('-');
+                return Vars.content.<Planet>getByName(ContentType.planet, name.substring(0, idx)).sectors.get(Integer.parseInt(name.substring(idx + 1)));
             }
         });
 
-        json.setSerializer(SectorPreset.class, new Serializer<SectorPreset>(){
+        json.setSerializer(SectorPreset.class, new Serializer<>(){
             @Override
             public void write(Json json, SectorPreset object, Class knownType){
                 json.writeValue(object.name);
@@ -100,7 +97,21 @@ public class JsonIO{
             }
         });
 
-        json.setSerializer(Item.class, new Serializer<Item>(){
+        json.setSerializer(Liquid.class, new Serializer<>(){
+            @Override
+            public void write(Json json, Liquid object, Class knownType){
+                json.writeValue(object.name);
+            }
+
+            @Override
+            public Liquid read(Json json, JsonValue jsonData, Class type){
+                if(jsonData.asString() == null) return Liquids.water;
+                Liquid i = Vars.content.getByName(ContentType.liquid, jsonData.asString());
+                return i == null ? Liquids.water : i;
+            }
+        });
+
+        json.setSerializer(Item.class, new Serializer<>(){
             @Override
             public void write(Json json, Item object, Class knownType){
                 json.writeValue(object.name);
@@ -109,12 +120,12 @@ public class JsonIO{
             @Override
             public Item read(Json json, JsonValue jsonData, Class type){
                 if(jsonData.asString() == null) return Items.copper;
-                Item i =  Vars.content.getByName(ContentType.item, jsonData.asString());
+                Item i = Vars.content.getByName(ContentType.item, jsonData.asString());
                 return i == null ? Items.copper : i;
             }
         });
 
-        json.setSerializer(Team.class, new Serializer<Team>(){
+        json.setSerializer(Team.class, new Serializer<>(){
             @Override
             public void write(Json json, Team object, Class knownType){
                 json.writeValue(object.id);
@@ -126,7 +137,7 @@ public class JsonIO{
             }
         });
 
-        json.setSerializer(Block.class, new Serializer<Block>(){
+        json.setSerializer(Block.class, new Serializer<>(){
             @Override
             public void write(Json json, Block object, Class knownType){
                 json.writeValue(object.name);
@@ -139,7 +150,7 @@ public class JsonIO{
             }
         });
 
-        json.setSerializer(Weather.class, new Serializer<Weather>(){
+        json.setSerializer(Weather.class, new Serializer<>(){
             @Override
             public void write(Json json, Weather object, Class knownType){
                 json.writeValue(object.name);
@@ -151,7 +162,19 @@ public class JsonIO{
             }
         });
 
-        json.setSerializer(ItemStack.class, new Serializer<ItemStack>(){
+        json.setSerializer(UnitType.class, new Serializer<>(){
+            @Override
+            public void write(Json json, UnitType object, Class knownType){
+                json.writeValue(object.name);
+            }
+
+            @Override
+            public UnitType read(Json json, JsonValue jsonData, Class type){
+                return Vars.content.getByName(ContentType.unit, jsonData.asString());
+            }
+        });
+
+        json.setSerializer(ItemStack.class, new Serializer<>(){
             @Override
             public void write(Json json, ItemStack object, Class knownType){
                 json.writeObjectStart();
@@ -165,14 +188,27 @@ public class JsonIO{
                 return new ItemStack(json.getSerializer(Item.class).read(json, jsonData.get("item"), Item.class), jsonData.getInt("amount"));
             }
         });
+
+        json.setSerializer(UnlockableContent.class, new Serializer<>(){
+            @Override
+            public void write(Json json, UnlockableContent object, Class knownType){
+                json.writeValue(object.name);
+            }
+
+            @Override
+            public UnlockableContent read(Json json, JsonValue jsonData, Class type){
+                String str = jsonData.asString();
+                Item item = Vars.content.getByName(ContentType.item, str);
+                Liquid liquid = Vars.content.getByName(ContentType.liquid, str);
+                return item != null ? item : liquid;
+            }
+        });
     }
 
     static class CustomJson extends Json{
         private Object baseObject;
 
-        {
-            apply(this);
-        }
+        { apply(this); }
 
         @Override
         public <T> T fromJson(Class<T> type, String json){

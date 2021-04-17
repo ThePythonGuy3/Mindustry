@@ -31,8 +31,8 @@ public class SNet implements SteamNetworkingCallback, SteamMatchmakingCallback, 
     final NetProvider provider;
 
     final PacketSerializer serializer = new PacketSerializer();
-    final ByteBuffer writeBuffer = ByteBuffer.allocateDirect(1024 * 4);
-    final ByteBuffer readBuffer = ByteBuffer.allocateDirect(1024 * 4);
+    final ByteBuffer writeBuffer = ByteBuffer.allocateDirect(16384);
+    final ByteBuffer readBuffer = ByteBuffer.allocateDirect(16384);
 
     final CopyOnWriteArrayList<SteamConnection> connections = new CopyOnWriteArrayList<>();
     final IntMap<SteamConnection> steamConnections = new IntMap<>(); //maps steam ID -> valid net connection
@@ -79,10 +79,14 @@ public class SNet implements SteamNetworkingCallback, SteamMatchmakingCallback, 
                                 Log.err(e);
                             }
                         }else if(currentServer != null && fromID == currentServer.getAccountID()){
-                            net.handleClientReceived(output);
+                            try{
+                                net.handleClientReceived(output);
+                            }catch(Throwable t){
+                                net.handleException(t);
+                            }
                         }
                     }catch(SteamException e){
-                        e.printStackTrace();
+                        Log.err(e);
                     }
                 }
             }
@@ -127,9 +131,10 @@ public class SNet implements SteamNetworkingCallback, SteamMatchmakingCallback, 
                 writeBuffer.limit(writeBuffer.capacity());
                 writeBuffer.position(0);
                 serializer.write(writeBuffer, object);
+                int length = writeBuffer.position();
                 writeBuffer.flip();
 
-                snet.sendP2PPacket(currentServer, writeBuffer, mode == SendMode.tcp ? P2PSend.Reliable : P2PSend.UnreliableNoDelay, 0);
+                snet.sendP2PPacket(currentServer, writeBuffer, mode == SendMode.tcp || length >= 1200 ? P2PSend.Reliable : P2PSend.UnreliableNoDelay, 0);
             }catch(Exception e){
                 net.showError(e);
             }
@@ -233,11 +238,22 @@ public class SNet implements SteamNetworkingCallback, SteamMatchmakingCallback, 
 
     @Override
     public void onLobbyEnter(SteamID steamIDLobby, int chatPermissions, boolean blocked, ChatRoomEnterResponse response){
-        Log.info("enter lobby @ @", steamIDLobby.getAccountID(), response);
+        Log.info("onLobbyEnter @ @", steamIDLobby.getAccountID(), response);
 
         if(response != ChatRoomEnterResponse.Success){
             ui.loadfrag.hide();
             ui.showErrorMessage(Core.bundle.format("cantconnect", response.toString()));
+            return;
+        }
+
+        int version = Strings.parseInt(smat.getLobbyData(steamIDLobby, "version"), -1);
+
+        //check version
+        if(version != Version.build){
+            ui.loadfrag.hide();
+            ui.showInfo("[scarlet]" + (version > Version.build ? KickReason.clientOutdated : KickReason.serverOutdated).toString() + "\n[]" +
+                Core.bundle.format("server.versions", Version.build, version));
+            smat.leaveLobby(steamIDLobby);
             return;
         }
 
@@ -304,7 +320,10 @@ public class SNet implements SteamNetworkingCallback, SteamMatchmakingCallback, 
             for(int i = 0; i < matches; i++){
                 try{
                     SteamID lobby = smat.getLobbyByIndex(i);
+                    String mode = smat.getLobbyData(lobby, "gamemode");
+                    if(mode == null || mode.isEmpty() || Strings.parseInt(smat.getLobbyData(lobby, "version"), -1) == -1) continue;
                     Host out = new Host(
+                        -1, //invalid ping
                         smat.getLobbyData(lobby, "name"),
                         "steam:" + lobby.handle(),
                         smat.getLobbyData(lobby, "mapname"),
@@ -312,9 +331,10 @@ public class SNet implements SteamNetworkingCallback, SteamMatchmakingCallback, 
                         smat.getNumLobbyMembers(lobby),
                         Strings.parseInt(smat.getLobbyData(lobby, "version"), -1),
                         smat.getLobbyData(lobby, "versionType"),
-                        Gamemode.valueOf(smat.getLobbyData(lobby, "gamemode")),
+                        mode == null || mode.isEmpty() ? Gamemode.survival : Gamemode.valueOf(mode),
                         smat.getLobbyMemberLimit(lobby),
-                        ""
+                        "",
+                        null
                     );
                     hosts.add(out);
                 }catch(Exception e){
@@ -443,9 +463,10 @@ public class SNet implements SteamNetworkingCallback, SteamMatchmakingCallback, 
                 writeBuffer.limit(writeBuffer.capacity());
                 writeBuffer.position(0);
                 serializer.write(writeBuffer, object);
+                int length = writeBuffer.position();
                 writeBuffer.flip();
 
-                snet.sendP2PPacket(sid, writeBuffer, mode == SendMode.tcp ? object instanceof StreamChunk ? P2PSend.ReliableWithBuffering : P2PSend.Reliable : P2PSend.UnreliableNoDelay, 0);
+                snet.sendP2PPacket(sid, writeBuffer, mode == SendMode.tcp || length >= 1200 ? object instanceof StreamChunk ? P2PSend.ReliableWithBuffering : P2PSend.Reliable : P2PSend.UnreliableNoDelay, 0);
             }catch(Exception e){
                 Log.err(e);
                 Log.info("Error sending packet. Disconnecting invalid client!");
